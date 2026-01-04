@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="keycloak/blazor-app-client.json" />
+    <File Path="keycloak/realm-export.json" />
+  </Folder>
+  <Project Path="OIDC_Testing/OIDC_Testing.csproj" />
+</Solution>

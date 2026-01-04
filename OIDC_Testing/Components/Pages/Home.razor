@@ -1,0 +1,20 @@
+﻿@page "/"
+
+<PageTitle>Home</PageTitle>
+
+<h1>Hello, world!</h1>
+
+<AuthorizeView>
+    <Authorized>
+        <p>Welcome, @context.User.Identity?.Name.</p>
+        <p>
+            <a class="btn btn-secondary me-2" href="/logout">Log out</a>
+            <a class="btn btn-primary me-2" href="/api/roles/user">Call app-user endpoint</a>
+            <a class="btn btn-warning" href="/api/roles/admin">Call app-admin endpoint</a>
+        </p>
+    </Authorized>
+    <NotAuthorized>
+        <p>Please sign in to access protected features.</p>
+        <a class="btn btn-primary" href="/login">Sign in with Keycloak</a>
+    </NotAuthorized>
+</AuthorizeView>

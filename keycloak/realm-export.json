@@ -1,0 +1,76 @@
+{
+  "id": "blazor-dev",
+  "realm": "blazor-dev",
+  "enabled": true,
+  "roles": {
+    "realm": [
+      {
+        "name": "app-admin",
+        "description": "Admin role for the Blazor app"
+      },
+      {
+        "name": "app-user",
+        "description": "User role for the Blazor app"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "blazor-app",
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "blazor-app-secret",
+      "redirectUris": [
+        "https://localhost:7235/signin-oidc",
+        "http://localhost:5041/signin-oidc"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "https://localhost:7235/*\nhttp://localhost:5041/*"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "firstName": "Alice",
+      "lastName": "Smith",
+      "email": "alicesmith@test.com",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Pass123$",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "app-user",
+        "offline_access"
+      ]
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "firstName": "Bob",
+      "lastName": "Admin",
+      "email": "bobadmin@test.com",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Pass123$",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "app-admin",
+        "app-user",
+        "offline_access"
+      ]
+    }
+  ]
+}
