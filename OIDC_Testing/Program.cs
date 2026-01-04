@@ -1,14 +1,14 @@
 using System.IdentityModel.Tokens.Jwt;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Server;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using OIDC_Testing.Components;
 using System.Security.Claims;
 using System.Text.Json;
+using OIDC_Testing.Endpoints;
+using Microsoft.AspNetCore.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -106,60 +106,8 @@ app.UseStatusCodePages(context =>
 
 app.UseAntiforgery();
 
-app.MapGet("/login", (HttpContext httpContext, string? returnUrl) =>
-{
-    var redirectUri = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl;
-    return Results.Challenge(
-        new AuthenticationProperties { RedirectUri = redirectUri },
-        new[] { OpenIdConnectDefaults.AuthenticationScheme });
-});
-
-app.MapGet("/logout", async (HttpContext httpContext) =>
-{
-    // Get the id_token directly from the user's authentication ticket
-    var authenticateResult = await httpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-    
-    var idToken = authenticateResult?.Properties?.GetTokenValue("id_token");
-    
-    // Log for debugging
-    Console.WriteLine($"Logout initiated. ID Token found: {!string.IsNullOrWhiteSpace(idToken)}");
-    
-    // Sign out from both schemes
-    await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-    
-    // Build the Keycloak logout URL manually
-    var keycloakAuthority = httpContext.RequestServices.GetRequiredService<IConfiguration>()["Keycloak:Authority"];
-    var clientId = httpContext.RequestServices.GetRequiredService<IConfiguration>()["Keycloak:ClientId"];
-    var postLogoutUri = "https://localhost:7235/";
-    
-    var logoutUrl = $"{keycloakAuthority}/protocol/openid-connect/logout?post_logout_redirect_uri={Uri.EscapeDataString(postLogoutUri)}&client_id={clientId}";
-    
-    // Only add id_token_hint if we have it
-    if (!string.IsNullOrWhiteSpace(idToken))
-    {
-        logoutUrl += $"&id_token_hint={Uri.EscapeDataString(idToken)}";
-    }
-    
-    return Results.Redirect(logoutUrl);
-});
-
-app.MapGet("/api/roles/user", [Authorize(Policy = "RequireAppUser")] (ClaimsPrincipal user) =>
-{
-    return Results.Ok(new
-    {
-        Message = "You have access to the app-user endpoint.",
-        User = user.Identity?.Name
-    });
-});
-
-app.MapGet("/api/roles/admin", [Authorize(Policy = "RequireAppAdmin")] (ClaimsPrincipal user) =>
-{
-    return Results.Ok(new
-    {
-        Message = "You have access to the app-admin endpoint.",
-        User = user.Identity?.Name
-    });
-});
+app.MapAuthenticationEndpoints();
+app.MapRoleEndpoints();
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
