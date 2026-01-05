@@ -64,11 +64,9 @@ builder.Services.AddAuthentication(options =>
         };
     });
 
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy("RequireAppUser", policy => policy.RequireRole("app-user"));
-    options.AddPolicy("RequireAppAdmin", policy => policy.RequireRole("app-admin"));
-});
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("RequireAppUser", policy => policy.RequireRole("app-user"))
+    .AddPolicy("RequireAppAdmin", policy => policy.RequireRole("app-admin"));
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();

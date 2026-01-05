@@ -13,7 +13,7 @@ public static class AuthenticationEndpoints
             var redirectUri = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl;
             return Results.Challenge(
                 new AuthenticationProperties { RedirectUri = redirectUri },
-                new[] { OpenIdConnectDefaults.AuthenticationScheme });
+                [OpenIdConnectDefaults.AuthenticationScheme]);
         });
 
         endpoints.MapGet("/logout", async (HttpContext httpContext) =>
