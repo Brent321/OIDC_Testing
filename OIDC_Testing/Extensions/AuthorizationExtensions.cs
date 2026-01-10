@@ -20,7 +20,7 @@ public static class AuthorizationExtensions
 
 public class CustomAuthorizationMiddlewareResultHandler : IAuthorizationMiddlewareResultHandler
 {
-    private readonly IAuthorizationMiddlewareResultHandler _defaultHandler = new AuthorizationMiddlewareResultHandler();
+    private readonly AuthorizationMiddlewareResultHandler _defaultHandler = new();
 
     public async Task HandleAsync(
         RequestDelegate next,

@@ -1,6 +1,3 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text.Json;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -8,9 +5,12 @@ using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using OIDC_Testing.Services;
 using Sustainsys.Saml2;
 using Sustainsys.Saml2.AspNetCore2;
-using Sustainsys.Saml2.Metadata;
 using Sustainsys.Saml2.Configuration;
+using Sustainsys.Saml2.Metadata;
 using Sustainsys.Saml2.WebSso;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Security.Cryptography.X509Certificates;
 
 namespace OIDC_Testing.Extensions;
 
@@ -20,18 +20,22 @@ public static class AuthenticationExtensions
     {
         var authMode = configuration["AuthenticationMode"]?.ToUpperInvariant() ?? "OIDC";
 
-        var authBuilder = services.AddAuthentication(options =>
-        {
-            options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-            options.DefaultChallengeScheme = authMode == "SAML" ? Saml2Defaults.Scheme : OpenIdConnectDefaults.AuthenticationScheme;
-        })
-            .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
+        var authBuilder = services
+            .AddAuthentication(options =>
             {
-                // Use different cookie names for different auth modes to prevent conflicts
-                options.Cookie.Name = $".AspNetCore.Cookies.{authMode}";
-                options.ExpireTimeSpan = TimeSpan.FromHours(1);
-                options.SlidingExpiration = true;
-            });
+                options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+
+                options.DefaultChallengeScheme = authMode == "SAML" ?
+                    Saml2Defaults.Scheme :
+                    OpenIdConnectDefaults.AuthenticationScheme;
+            })
+            .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
+             {
+                 // Use different cookie names for different auth modes to prevent conflicts
+                 options.Cookie.Name = $".AspNetCore.Cookies.{authMode}";
+                 options.ExpireTimeSpan = TimeSpan.FromHours(1);
+                 options.SlidingExpiration = true;
+             });
 
         authBuilder.AddOidcAuthentication(configuration);
         authBuilder.AddSamlAuthentication(configuration, environment);
@@ -93,10 +97,10 @@ public static class AuthenticationExtensions
         return authBuilder.AddSaml2(Saml2Defaults.Scheme, options =>
         {
             var saml2Config = configuration.GetSection("Saml2");
-            
+
             options.SPOptions.EntityId = new EntityId(saml2Config["EntityId"] ?? "https://localhost:7235");
             options.SPOptions.ReturnUrl = new Uri(saml2Config["EntityId"] ?? "https://localhost:7235");
-            
+
             // Disable request signing in development
             if (environment.IsDevelopment())
             {
@@ -107,14 +111,14 @@ public static class AuthenticationExtensions
                 // In production, check if a certificate is configured
                 var certPath = saml2Config["SigningCertificatePath"];
                 var certPassword = saml2Config["SigningCertificatePassword"];
-                
+
                 if (!string.IsNullOrWhiteSpace(certPath) && File.Exists(certPath))
                 {
-                    var certificate = new System.Security.Cryptography.X509Certificates.X509Certificate2(
-                        certPath, 
+                    var certificate = new X509Certificate2(
+                        certPath,
                         certPassword,
-                        System.Security.Cryptography.X509Certificates.X509KeyStorageFlags.MachineKeySet);
-                    
+                        X509KeyStorageFlags.MachineKeySet);
+
                     options.SPOptions.ServiceCertificates.Add(new ServiceCertificate
                     {
                         Certificate = certificate,
@@ -127,7 +131,7 @@ public static class AuthenticationExtensions
                     options.SPOptions.AuthenticateRequestSigningBehavior = SigningBehavior.Never;
                 }
             }
-            
+
             var idp = new IdentityProvider(
                 new EntityId(saml2Config["IdpEntityId"] ?? "http://localhost:8080/realms/blazor-dev"),
                 options.SPOptions)
@@ -150,7 +154,7 @@ public static class AuthenticationExtensions
             }
 
             options.IdentityProviders.Add(idp);
-            
+
             options.Notifications.AcsCommandResultCreated = (result, response) =>
             {
                 if (result.Principal?.Identity is ClaimsIdentity identity)
@@ -159,7 +163,7 @@ public static class AuthenticationExtensions
                     var roleClaims = identity.FindAll("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
                         .Concat(identity.FindAll("Role"))
                         .ToList();
-                    
+
                     foreach (var roleClaim in roleClaims)
                     {
                         if (!string.IsNullOrWhiteSpace(roleClaim.Value))
