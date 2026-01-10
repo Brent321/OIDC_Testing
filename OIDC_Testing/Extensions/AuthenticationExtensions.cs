@@ -10,6 +10,7 @@ using Sustainsys.Saml2;
 using Sustainsys.Saml2.AspNetCore2;
 using Sustainsys.Saml2.Metadata;
 using Sustainsys.Saml2.Configuration;
+using Sustainsys.Saml2.WebSso;
 
 namespace OIDC_Testing.Extensions;
 
@@ -94,9 +95,9 @@ public static class AuthenticationExtensions
             var saml2Config = configuration.GetSection("Saml2");
             
             options.SPOptions.EntityId = new EntityId(saml2Config["EntityId"] ?? "https://localhost:7235");
-            options.SPOptions.ReturnUrl = new Uri("https://localhost:7235/");
+            options.SPOptions.ReturnUrl = new Uri(saml2Config["EntityId"] ?? "https://localhost:7235");
             
-            // Disable request signing in development, enable in production (if certificate is configured)
+            // Disable request signing in development
             if (environment.IsDevelopment())
             {
                 options.SPOptions.AuthenticateRequestSigningBehavior = SigningBehavior.Never;
@@ -131,10 +132,22 @@ public static class AuthenticationExtensions
                 new EntityId(saml2Config["IdpEntityId"] ?? "http://localhost:8080/realms/blazor-dev"),
                 options.SPOptions)
             {
-                MetadataLocation = saml2Config["IdpMetadataUrl"] ?? "http://localhost:8080/realms/blazor-dev/protocol/saml/descriptor",
-                LoadMetadata = true,
-                AllowUnsolicitedAuthnResponse = bool.TryParse(saml2Config["AllowUnsolicitedAuthnResponse"], out var allowUnsolicited) && allowUnsolicited
+                SingleSignOnServiceUrl = new Uri(saml2Config["IdpSingleSignOnUrl"] ?? "http://localhost:8080/realms/blazor-dev/protocol/saml"),
+                Binding = Saml2BindingType.HttpRedirect,
+                AllowUnsolicitedAuthnResponse = bool.TryParse(saml2Config["AllowUnsolicitedAuthnResponse"], out var allowUnsolicited) && allowUnsolicited,
+                WantAuthnRequestsSigned = false
             };
+
+            // Try to load metadata, but continue if it fails
+            try
+            {
+                idp.MetadataLocation = saml2Config["IdpMetadataUrl"] ?? "http://localhost:8080/realms/blazor-dev/protocol/saml/descriptor";
+                idp.LoadMetadata = true;
+            }
+            catch
+            {
+                // Metadata loading failed, continue with manual configuration
+            }
 
             options.IdentityProviders.Add(idp);
             
@@ -142,10 +155,17 @@ public static class AuthenticationExtensions
             {
                 if (result.Principal?.Identity is ClaimsIdentity identity)
                 {
-                    var roleClaims = identity.FindAll("http://schemas.microsoft.com/ws/2008/06/identity/claims/role").ToList();
+                    // Map SAML role claims to the expected role claim type
+                    var roleClaims = identity.FindAll("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
+                        .Concat(identity.FindAll("Role"))
+                        .ToList();
+                    
                     foreach (var roleClaim in roleClaims)
                     {
-                        identity.AddClaim(new Claim(identity.RoleClaimType ?? ClaimTypes.Role, roleClaim.Value));
+                        if (!string.IsNullOrWhiteSpace(roleClaim.Value))
+                        {
+                            identity.AddClaim(new Claim(identity.RoleClaimType ?? ClaimTypes.Role, roleClaim.Value));
+                        }
                     }
                 }
             };
