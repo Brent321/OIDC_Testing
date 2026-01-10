@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/Solution Items/">
+    <File Path="docker-compose.yml" />
     <File Path="keycloak/blazor-app-client.json" />
     <File Path="keycloak/realm-export.json" />
   </Folder>

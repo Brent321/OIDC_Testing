@@ -3,7 +3,7 @@ using OIDC_Testing.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddCustomAuthentication(builder.Configuration);
+builder.Services.AddCustomAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddCustomAuthorization();
 builder.Services.AddControllers();
 builder.Services.AddBlazorServices();

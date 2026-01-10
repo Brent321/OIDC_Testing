@@ -82,4 +82,15 @@ public class AuthenticationController : ControllerBase
         
         return Redirect(logoutUrl);
     }
+
+    [HttpGet("clear-cookies")]
+    public IActionResult ClearCookies()
+    {
+        // Clear all auth cookies - useful for development
+        Response.Cookies.Delete(".AspNetCore.Cookies");
+        Response.Cookies.Delete(".AspNetCore.Cookies.OIDC");
+        Response.Cookies.Delete(".AspNetCore.Cookies.SAML");
+        
+        return Ok(new { Message = "All authentication cookies cleared. Please refresh the page." });
+    }
 }

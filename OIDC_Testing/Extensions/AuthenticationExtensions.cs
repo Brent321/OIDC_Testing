@@ -9,12 +9,13 @@ using OIDC_Testing.Services;
 using Sustainsys.Saml2;
 using Sustainsys.Saml2.AspNetCore2;
 using Sustainsys.Saml2.Metadata;
+using Sustainsys.Saml2.Configuration;
 
 namespace OIDC_Testing.Extensions;
 
 public static class AuthenticationExtensions
 {
-    public static IServiceCollection AddCustomAuthentication(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddCustomAuthentication(this IServiceCollection services, IConfiguration configuration, IWebHostEnvironment environment)
     {
         var authMode = configuration["AuthenticationMode"]?.ToUpperInvariant() ?? "OIDC";
 
@@ -23,10 +24,16 @@ public static class AuthenticationExtensions
             options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
             options.DefaultChallengeScheme = authMode == "SAML" ? Saml2Defaults.Scheme : OpenIdConnectDefaults.AuthenticationScheme;
         })
-            .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme);
+            .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
+            {
+                // Use different cookie names for different auth modes to prevent conflicts
+                options.Cookie.Name = $".AspNetCore.Cookies.{authMode}";
+                options.ExpireTimeSpan = TimeSpan.FromHours(1);
+                options.SlidingExpiration = true;
+            });
 
         authBuilder.AddOidcAuthentication(configuration);
-        authBuilder.AddSamlAuthentication(configuration);
+        authBuilder.AddSamlAuthentication(configuration, environment);
 
         return services;
     }
@@ -80,7 +87,7 @@ public static class AuthenticationExtensions
         });
     }
 
-    private static AuthenticationBuilder AddSamlAuthentication(this AuthenticationBuilder authBuilder, IConfiguration configuration)
+    private static AuthenticationBuilder AddSamlAuthentication(this AuthenticationBuilder authBuilder, IConfiguration configuration, IWebHostEnvironment environment)
     {
         return authBuilder.AddSaml2(Saml2Defaults.Scheme, options =>
         {
@@ -88,6 +95,37 @@ public static class AuthenticationExtensions
             
             options.SPOptions.EntityId = new EntityId(saml2Config["EntityId"] ?? "https://localhost:7235");
             options.SPOptions.ReturnUrl = new Uri("https://localhost:7235/");
+            
+            // Disable request signing in development, enable in production (if certificate is configured)
+            if (environment.IsDevelopment())
+            {
+                options.SPOptions.AuthenticateRequestSigningBehavior = SigningBehavior.Never;
+            }
+            else
+            {
+                // In production, check if a certificate is configured
+                var certPath = saml2Config["SigningCertificatePath"];
+                var certPassword = saml2Config["SigningCertificatePassword"];
+                
+                if (!string.IsNullOrWhiteSpace(certPath) && File.Exists(certPath))
+                {
+                    var certificate = new System.Security.Cryptography.X509Certificates.X509Certificate2(
+                        certPath, 
+                        certPassword,
+                        System.Security.Cryptography.X509Certificates.X509KeyStorageFlags.MachineKeySet);
+                    
+                    options.SPOptions.ServiceCertificates.Add(new ServiceCertificate
+                    {
+                        Certificate = certificate,
+                        Use = CertificateUse.Signing
+                    });
+                }
+                else
+                {
+                    // Fall back to not signing if no certificate is provided
+                    options.SPOptions.AuthenticateRequestSigningBehavior = SigningBehavior.Never;
+                }
+            }
             
             var idp = new IdentityProvider(
                 new EntityId(saml2Config["IdpEntityId"] ?? "http://localhost:8080/realms/blazor-dev"),

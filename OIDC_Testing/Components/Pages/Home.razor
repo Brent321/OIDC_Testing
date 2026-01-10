@@ -1,4 +1,5 @@
 ﻿@page "/"
+@inject IJSRuntime JS
 
 <PageTitle>Home</PageTitle>
 
@@ -22,3 +23,32 @@
         </div>
     </NotAuthorized>
 </AuthorizeView>
+
+<hr class="my-4" />
+
+<div class="alert alert-warning" role="alert">
+    <h4 class="alert-heading">Development Tools</h4>
+    <p>Use this button to clear all authentication cookies when switching between OIDC and SAML modes.</p>
+    <button class="btn btn-danger btn-sm" @onclick="ClearCookies">
+        <i class="bi bi-trash"></i> Clear Authentication Cookies
+    </button>
+</div>
+
+@code {
+    private async Task ClearCookies()
+    {
+        try
+        {
+            var response = await new HttpClient().GetAsync("/authentication/clear-cookies");
+            if (response.IsSuccessStatusCode)
+            {
+                await JS.InvokeVoidAsync("alert", "Authentication cookies cleared successfully. The page will now reload.");
+                await JS.InvokeVoidAsync("location.reload");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Error clearing cookies: {ex.Message}");
+        }
+    }
+}
