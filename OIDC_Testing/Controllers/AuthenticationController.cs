@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Mvc;
+using Sustainsys.Saml2.AspNetCore2;
 
 namespace OIDC_Testing.Controllers;
 
@@ -17,7 +18,19 @@ public class AuthenticationController : ControllerBase
     }
 
     [HttpGet("login")]
-    public IActionResult Login(string? returnUrl)
+    public IActionResult Login(string? returnUrl, string? scheme)
+    {
+        var authMode = _configuration["AuthenticationMode"]?.ToUpperInvariant() ?? "OIDC";
+        var authScheme = scheme ?? (authMode == "SAML" ? Saml2Defaults.Scheme : OpenIdConnectDefaults.AuthenticationScheme);
+        
+        var redirectUri = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl;
+        return Challenge(
+            new AuthenticationProperties { RedirectUri = redirectUri },
+            authScheme);
+    }
+
+    [HttpGet("login-oidc")]
+    public IActionResult LoginOidc(string? returnUrl)
     {
         var redirectUri = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl;
         return Challenge(
@@ -25,10 +38,30 @@ public class AuthenticationController : ControllerBase
             OpenIdConnectDefaults.AuthenticationScheme);
     }
 
+    [HttpGet("login-saml")]
+    public IActionResult LoginSaml(string? returnUrl)
+    {
+        var redirectUri = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl;
+        return Challenge(
+            new AuthenticationProperties { RedirectUri = redirectUri },
+            Saml2Defaults.Scheme);
+    }
+
     [HttpGet("logout")]
     public async Task<IActionResult> Logout()
     {
         var authenticateResult = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        
+        var authScheme = authenticateResult?.Properties?.Items[".AuthScheme"];
+        var isSaml = authScheme == Saml2Defaults.Scheme;
+        
+        if (isSaml)
+        {
+            return SignOut(
+                new AuthenticationProperties { RedirectUri = "/" },
+                CookieAuthenticationDefaults.AuthenticationScheme,
+                Saml2Defaults.Scheme);
+        }
         
         var idToken = authenticateResult?.Properties?.GetTokenValue("id_token");
         

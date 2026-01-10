@@ -15,6 +15,10 @@
     </Authorized>
     <NotAuthorized>
         <p>Please sign in to access protected features.</p>
-        <a class="btn btn-primary" href="/authentication/login">Sign in with Keycloak</a>
+        <div class="d-flex gap-2">
+            <a class="btn btn-primary" href="/authentication/login">Sign in (Default)</a>
+            <a class="btn btn-outline-primary" href="/authentication/login-oidc">Sign in with OIDC</a>
+            <a class="btn btn-outline-secondary" href="/authentication/login-saml">Sign in with SAML</a>
+        </div>
     </NotAuthorized>
 </AuthorizeView>
