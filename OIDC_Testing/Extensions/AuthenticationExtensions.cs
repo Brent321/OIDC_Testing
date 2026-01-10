@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using OIDC_Testing.Configuration;
 using OIDC_Testing.Services;
 using Sustainsys.Saml2;
 using Sustainsys.Saml2.AspNetCore2;
@@ -21,41 +23,47 @@ public static class AuthenticationExtensions
     {
         var configuration = builder.Configuration;
         var environment = builder.Environment;
+
+        // Register configuration options
+        services.Configure<KeycloakOptions>(configuration.GetSection(KeycloakOptions.SectionName));
+        services.Configure<Saml2ConfigurationOptions>(configuration.GetSection(Saml2ConfigurationOptions.SectionName));
+
         var authMode = configuration["AuthenticationMode"]?.ToUpperInvariant() ?? "OIDC";
 
         var authBuilder = services
             .AddAuthentication(options =>
             {
                 options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-
                 options.DefaultChallengeScheme = authMode == "SAML" ?
                     Saml2Defaults.Scheme :
                     OpenIdConnectDefaults.AuthenticationScheme;
             })
             .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
-             {
-                 // Use different cookie names for different auth modes to prevent conflicts
-                 options.Cookie.Name = $".AspNetCore.Cookies.{authMode}";
-                 options.ExpireTimeSpan = TimeSpan.FromHours(1);
-                 options.SlidingExpiration = true;
-             });
+            {
+                options.Cookie.Name = $".AspNetCore.Cookies.{authMode}";
+                options.ExpireTimeSpan = TimeSpan.FromHours(1);
+                options.SlidingExpiration = true;
+            });
 
-        authBuilder.AddOidcAuthentication(configuration);
-        authBuilder.AddSamlAuthentication(configuration, environment);
+        authBuilder.AddOidcAuthentication(services);
+        authBuilder.AddSamlAuthentication(services, environment);
 
         return services;
     }
 
-    private static AuthenticationBuilder AddOidcAuthentication(this AuthenticationBuilder authBuilder, IConfiguration configuration)
+    private static AuthenticationBuilder AddOidcAuthentication(this AuthenticationBuilder authBuilder, IServiceCollection services)
     {
         return authBuilder.AddOpenIdConnect(OpenIdConnectDefaults.AuthenticationScheme, options =>
         {
-            var keycloak = configuration.GetSection("Keycloak");
-            options.Authority = keycloak["Authority"];
-            options.MetadataAddress = keycloak["MetadataAddress"];
-            options.RequireHttpsMetadata = bool.TryParse(keycloak["RequireHttpsMetadata"], out var requireHttps) && requireHttps;
-            options.ClientId = keycloak["ClientId"];
-            options.ClientSecret = keycloak["ClientSecret"];
+            // Use a service provider to resolve options if needed
+            var sp = services.BuildServiceProvider();
+            var keycloakOptions = sp.GetRequiredService<IOptions<KeycloakOptions>>().Value;
+
+            options.Authority = keycloakOptions.Authority;
+            options.MetadataAddress = keycloakOptions.MetadataAddress;
+            options.RequireHttpsMetadata = keycloakOptions.RequireHttpsMetadata;
+            options.ClientId = keycloakOptions.ClientId;
+            options.ClientSecret = keycloakOptions.ClientSecret;
             options.ResponseType = OpenIdConnectResponseType.Code;
             options.SaveTokens = true;
             options.GetClaimsFromUserInfoEndpoint = true;
@@ -73,7 +81,7 @@ public static class AuthenticationExtensions
             options.ClaimActions.MapJsonKey("preferred_username", "preferred_username");
             options.ClaimActions.MapJsonKey("realm_access", "realm_access", "JsonElement");
 
-            options.CallbackPath = "/signin-oidc";
+            options.CallbackPath = keycloakOptions.CallbackPath;
 
             options.Events.OnTokenValidated = context =>
             {
@@ -86,7 +94,7 @@ public static class AuthenticationExtensions
                         var accessJwt = handler.ReadJwtToken(accessToken);
 
                         KeycloakRoleMapper.AddRealmRoles(accessJwt, identity);
-                        KeycloakRoleMapper.AddClientRoles(accessJwt, identity, keycloak["ClientId"]);
+                        KeycloakRoleMapper.AddClientRoles(accessJwt, identity, keycloakOptions.ClientId);
                     }
                 }
 
@@ -95,14 +103,16 @@ public static class AuthenticationExtensions
         });
     }
 
-    private static AuthenticationBuilder AddSamlAuthentication(this AuthenticationBuilder authBuilder, IConfiguration configuration, IWebHostEnvironment environment)
+    private static AuthenticationBuilder AddSamlAuthentication(this AuthenticationBuilder authBuilder, IServiceCollection services, IWebHostEnvironment environment)
     {
         return authBuilder.AddSaml2(Saml2Defaults.Scheme, options =>
         {
-            var saml2Config = configuration.GetSection("Saml2");
+            // Use a service provider to resolve options if needed
+            var sp = services.BuildServiceProvider();
+            var saml2Options = sp.GetRequiredService<IOptions<Saml2ConfigurationOptions>>().Value;
 
-            options.SPOptions.EntityId = new EntityId(saml2Config["EntityId"] ?? "https://localhost:7235");
-            options.SPOptions.ReturnUrl = new Uri(saml2Config["EntityId"] ?? "https://localhost:7235");
+            options.SPOptions.EntityId = new EntityId(saml2Options.EntityId);
+            options.SPOptions.ReturnUrl = new Uri(saml2Options.EntityId);
 
             // Disable request signing in development
             if (environment.IsDevelopment())
@@ -112,14 +122,12 @@ public static class AuthenticationExtensions
             else
             {
                 // In production, check if a certificate is configured
-                var certPath = saml2Config["SigningCertificatePath"];
-                var certPassword = saml2Config["SigningCertificatePassword"];
-
-                if (!string.IsNullOrWhiteSpace(certPath) && File.Exists(certPath))
+                if (!string.IsNullOrWhiteSpace(saml2Options.SigningCertificatePath) &&
+                    File.Exists(saml2Options.SigningCertificatePath))
                 {
                     var certificate = new X509Certificate2(
-                        certPath,
-                        certPassword,
+                        saml2Options.SigningCertificatePath,
+                        saml2Options.SigningCertificatePassword,
                         X509KeyStorageFlags.MachineKeySet);
 
                     options.SPOptions.ServiceCertificates.Add(new ServiceCertificate
@@ -130,31 +138,28 @@ public static class AuthenticationExtensions
                 }
                 else
                 {
-                    // Fall back to not signing if no certificate is provided
                     options.SPOptions.AuthenticateRequestSigningBehavior = SigningBehavior.Never;
                 }
             }
 
             var idp = new IdentityProvider(
-                new EntityId(saml2Config["IdpEntityId"] ?? "http://localhost:8080/realms/blazor-dev"),
+                new EntityId(saml2Options.IdpEntityId),
                 options.SPOptions)
             {
-                SingleSignOnServiceUrl = new Uri(saml2Config["IdpSingleSignOnUrl"] ?? "http://localhost:8080/realms/blazor-dev/protocol/saml"),
+                SingleSignOnServiceUrl = new Uri(saml2Options.IdpSingleSignOnUrl),
                 Binding = Saml2BindingType.HttpRedirect,
-                AllowUnsolicitedAuthnResponse = bool.TryParse(saml2Config["AllowUnsolicitedAuthnResponse"], out var allowUnsolicited) && allowUnsolicited,
+                AllowUnsolicitedAuthnResponse = saml2Options.AllowUnsolicitedAuthnResponse,
                 WantAuthnRequestsSigned = false
             };
 
             // Try to load metadata, but continue if it fails
             try
             {
-                idp.MetadataLocation = saml2Config["IdpMetadataUrl"] ?? "http://localhost:8080/realms/blazor-dev/protocol/saml/descriptor";
+                idp.MetadataLocation = saml2Options.IdpMetadataUrl;
                 idp.LoadMetadata = true;
             }
             catch (Exception ex)
             {
-                // Log the error but continue with manual configuration
-                // In a real application, consider injecting ILogger here
                 Debug.WriteLine($"Failed to load SAML metadata: {ex.Message}");
             }
 
@@ -164,7 +169,6 @@ public static class AuthenticationExtensions
             {
                 if (result.Principal?.Identity is ClaimsIdentity identity)
                 {
-                    // Map SAML role claims to the expected role claim type
                     var roleClaims = identity.FindAll("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
                         .Concat(identity.FindAll("Role"))
                         .ToList();
