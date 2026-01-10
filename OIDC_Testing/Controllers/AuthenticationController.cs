@@ -11,10 +11,12 @@ namespace OIDC_Testing.Controllers;
 public class AuthenticationController : ControllerBase
 {
     private readonly IConfiguration _configuration;
+    private readonly ILogger<AuthenticationController> _logger;
 
-    public AuthenticationController(IConfiguration configuration)
+    public AuthenticationController(IConfiguration configuration, ILogger<AuthenticationController> logger)
     {
         _configuration = configuration;
+        _logger = logger;
     }
 
     [HttpGet("login")]
@@ -24,6 +26,9 @@ public class AuthenticationController : ControllerBase
         var authScheme = scheme ?? (authMode == "SAML" ? Saml2Defaults.Scheme : OpenIdConnectDefaults.AuthenticationScheme);
         
         var redirectUri = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl;
+        
+        _logger.LogInformation("Login initiated with scheme: {Scheme}, redirect: {RedirectUri}", authScheme, redirectUri);
+        
         return Challenge(
             new AuthenticationProperties { RedirectUri = redirectUri },
             authScheme);
@@ -33,6 +38,9 @@ public class AuthenticationController : ControllerBase
     public IActionResult LoginOidc(string? returnUrl)
     {
         var redirectUri = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl;
+        
+        _logger.LogInformation("OIDC login initiated, redirect: {RedirectUri}", redirectUri);
+        
         return Challenge(
             new AuthenticationProperties { RedirectUri = redirectUri },
             OpenIdConnectDefaults.AuthenticationScheme);
@@ -42,6 +50,9 @@ public class AuthenticationController : ControllerBase
     public IActionResult LoginSaml(string? returnUrl)
     {
         var redirectUri = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl;
+        
+        _logger.LogInformation("SAML login initiated, redirect: {RedirectUri}", redirectUri);
+        
         return Challenge(
             new AuthenticationProperties { RedirectUri = redirectUri },
             Saml2Defaults.Scheme);
@@ -55,9 +66,12 @@ public class AuthenticationController : ControllerBase
         // Check if user is authenticated
         if (authenticateResult?.Succeeded != true)
         {
+            _logger.LogWarning("Logout attempted but no authenticated user found");
             return Redirect("/");
         }
 
+        var userName = authenticateResult.Principal?.Identity?.Name;
+        
         // Determine authentication mode from configuration as fallback
         var authMode = _configuration["AuthenticationMode"]?.ToUpperInvariant() ?? "OIDC";
         var isSaml = authMode == "SAML";
@@ -78,6 +92,8 @@ public class AuthenticationController : ControllerBase
         
         if (isSaml)
         {
+            _logger.LogInformation("SAML logout initiated for user: {UserName}", userName);
+            
             return SignOut(
                 new AuthenticationProperties { RedirectUri = "/" },
                 CookieAuthenticationDefaults.AuthenticationScheme,
@@ -87,13 +103,14 @@ public class AuthenticationController : ControllerBase
         // OIDC logout
         var idToken = authenticateResult.Properties?.GetTokenValue("id_token");
         
-        Console.WriteLine($"Logout initiated. ID Token found: {!string.IsNullOrWhiteSpace(idToken)}");
+        _logger.LogInformation("OIDC logout initiated for user: {UserName}, ID Token present: {HasIdToken}", 
+            userName, !string.IsNullOrWhiteSpace(idToken));
         
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         
         var keycloakAuthority = _configuration["Keycloak:Authority"];
         var clientId = _configuration["Keycloak:ClientId"];
-        var postLogoutUri = "https://localhost:7235/";
+        var postLogoutUri = _configuration["Keycloak:PostLogoutRedirectUri"] ?? "https://localhost:7235/";
         
         var logoutUrl = $"{keycloakAuthority}/protocol/openid-connect/logout?post_logout_redirect_uri={Uri.EscapeDataString(postLogoutUri)}&client_id={clientId}";
         
@@ -108,6 +125,8 @@ public class AuthenticationController : ControllerBase
     [HttpGet("clear-cookies")]
     public IActionResult ClearCookies()
     {
+        _logger.LogInformation("Clearing all authentication cookies");
+        
         // Clear all auth cookies - useful for development
         Response.Cookies.Delete(".AspNetCore.Cookies");
         Response.Cookies.Delete(".AspNetCore.Cookies.OIDC");

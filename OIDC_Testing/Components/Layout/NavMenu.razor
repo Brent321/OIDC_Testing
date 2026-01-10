@@ -4,10 +4,10 @@
         <AuthorizeView>
             <Authorized>
                 <span class="text-light me-3">Hello, @context.User.Identity?.Name</span>
-                <a class="btn btn-outline-light btn-sm" href="/logout">Log out</a>
+                <a class="btn btn-outline-light btn-sm" href="/authentication/logout">Log out</a>
             </Authorized>
             <NotAuthorized>
-                <a class="btn btn-outline-light btn-sm" href="/login">Log in</a>
+                <a class="btn btn-outline-light btn-sm" href="/authentication/login">Log in</a>
             </NotAuthorized>
         </AuthorizeView>
     </div>

@@ -12,6 +12,9 @@ public static class BlazorExtensions
 
         services.AddCascadingAuthenticationState();
         services.AddScoped<AuthenticationStateProvider, ServerAuthenticationStateProvider>();
+        
+        // Add HttpClient factory for proper HttpClient management
+        services.AddHttpClient();
 
         return services;
     }

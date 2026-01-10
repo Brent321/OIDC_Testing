@@ -1,5 +1,6 @@
 ﻿@page "/"
 @inject IJSRuntime JS
+@inject IHttpClientFactory HttpClientFactory
 
 <PageTitle>Home</PageTitle>
 
@@ -39,7 +40,8 @@
     {
         try
         {
-            var response = await new HttpClient().GetAsync("/authentication/clear-cookies");
+            var httpClient = HttpClientFactory.CreateClient();
+            var response = await httpClient.GetAsync("/authentication/clear-cookies");
             if (response.IsSuccessStatusCode)
             {
                 await JS.InvokeVoidAsync("alert", "Authentication cookies cleared successfully. The page will now reload.");

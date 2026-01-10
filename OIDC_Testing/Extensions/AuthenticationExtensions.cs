@@ -8,6 +8,7 @@ using Sustainsys.Saml2.AspNetCore2;
 using Sustainsys.Saml2.Configuration;
 using Sustainsys.Saml2.Metadata;
 using Sustainsys.Saml2.WebSso;
+using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography.X509Certificates;
@@ -150,9 +151,11 @@ public static class AuthenticationExtensions
                 idp.MetadataLocation = saml2Config["IdpMetadataUrl"] ?? "http://localhost:8080/realms/blazor-dev/protocol/saml/descriptor";
                 idp.LoadMetadata = true;
             }
-            catch
+            catch (Exception ex)
             {
-                // Metadata loading failed, continue with manual configuration
+                // Log the error but continue with manual configuration
+                // In a real application, consider injecting ILogger here
+                Debug.WriteLine($"Failed to load SAML metadata: {ex.Message}");
             }
 
             options.IdentityProviders.Add(idp);
