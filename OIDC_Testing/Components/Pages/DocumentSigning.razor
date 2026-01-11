@@ -1,0 +1,520 @@
+﻿@page "/document-signing"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Authentication
+@using System.Text.Json
+@using OIDC_Testing.Services
+@attribute [Authorize]
+@inject IDocumentSigningService SigningService
+@inject IHttpContextAccessor HttpContextAccessor
+@rendermode InteractiveServer
+
+<PageTitle>Document Signing</PageTitle>
+
+<div class="container mt-4">
+    <h1>Document & JSON Signing with Keycloak</h1>
+    <p class="text-muted">Sign and verify documents or JSON data using your Keycloak identity</p>
+
+    <!-- Tab Navigation -->
+    <ul class="nav nav-tabs mb-4" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(activeTab == "document" ? "active" : "")" 
+                    @onclick='() => SetActiveTab("document")' 
+                    type="button">
+                Document Signing
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(activeTab == "json" ? "active" : "")" 
+                    @onclick='() => SetActiveTab("json")' 
+                    type="button">
+                JSON Signing
+            </button>
+        </li>
+    </ul>
+
+    <!-- Document Signing Tab -->
+    @if (activeTab == "document")
+    {
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Sign Document</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Select Document to Sign</label>
+                            <InputFile OnChange="OnDocumentSelected" class="form-control" accept="*/*" />
+                            @if (!string.IsNullOrEmpty(selectedFileName))
+                            {
+                                <small class="text-muted">Selected: @selectedFileName</small>
+                            }
+                        </div>
+                        <button class="btn btn-primary" @onclick="SignDocument" disabled="@(!canSign || isSigning)">
+                            @if (isSigning)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            }
+                            Sign Document
+                        </button>
+
+                        @if (!string.IsNullOrEmpty(signatureResult))
+                        {
+                            <div class="alert alert-success mt-3" role="alert">
+                                <h6>Document Signed Successfully!</h6>
+                                <p class="mb-2"><strong>Signed by:</strong> @signedBy</p>
+                                <p class="mb-2"><strong>Signed at:</strong> @signedAt</p>
+                                <div class="mb-2">
+                                    <strong>Signature:</strong>
+                                    <textarea class="form-control mt-1" rows="4" readonly>@signatureResult</textarea>
+                                </div>
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(signError))
+                        {
+                            <div class="alert alert-danger mt-3" role="alert">
+                                @signError
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">Verify Document Signature</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Select Document to Verify</label>
+                            <InputFile OnChange="OnVerifyDocumentSelected" class="form-control" accept="*/*" />
+                            @if (!string.IsNullOrEmpty(verifyFileName))
+                            {
+                                <small class="text-muted">Selected: @verifyFileName</small>
+                            }
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Paste Signature</label>
+                            <InputTextArea @bind-Value="signatureToVerify" class="form-control" rows="4" />
+                        </div>
+                        <button class="btn btn-success" @onclick="VerifySignature" disabled="@(!canVerify || isVerifying)">
+                            @if (isVerifying)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            }
+                            Verify Signature
+                        </button>
+
+                        @if (verificationResult.HasValue)
+                        {
+                            @if (verificationResult.Value)
+                            {
+                                <div class="alert alert-success mt-3" role="alert">
+                                    <strong>✓ Valid Signature</strong>
+                                    <p class="mb-0">The document signature is valid and the document has not been modified.</p>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="alert alert-danger mt-3" role="alert">
+                                    <strong>✗ Invalid Signature</strong>
+                                    <p class="mb-0">The signature is invalid or the document has been modified.</p>
+                                </div>
+                            }
+                        }
+
+                        @if (!string.IsNullOrEmpty(verifyError))
+                        {
+                            <div class="alert alert-danger mt-3" role="alert">
+                                @verifyError
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- JSON Signing Tab -->
+    @if (activeTab == "json")
+    {
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Sign JSON Data</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Identifier (optional)</label>
+                            <InputText @bind-Value="jsonIdentifier" class="form-control" placeholder="e.g., user-profile, transaction-123" />
+                            <small class="text-muted">A name to identify this JSON data</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">JSON Data to Sign</label>
+                            <InputTextArea @bind-Value="jsonToSign" class="form-control" rows="10" placeholder='{"key": "value"}' />
+                            <small class="text-muted">Enter valid JSON data</small>
+                        </div>
+                        <button class="btn btn-primary" @onclick="SignJson" disabled="@(!canSignJson || isSigningJson)">
+                            @if (isSigningJson)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            }
+                            Sign JSON
+                        </button>
+
+                        @if (!string.IsNullOrEmpty(jsonSignatureResult))
+                        {
+                            <div class="alert alert-success mt-3" role="alert">
+                                <h6>JSON Signed Successfully!</h6>
+                                <p class="mb-2"><strong>Signed by:</strong> @jsonSignedBy</p>
+                                <p class="mb-2"><strong>Signed at:</strong> @jsonSignedAt</p>
+                                <div class="mb-2">
+                                    <strong>Signature:</strong>
+                                    <textarea class="form-control mt-1" rows="4" readonly>@jsonSignatureResult</textarea>
+                                </div>
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(jsonSignError))
+                        {
+                            <div class="alert alert-danger mt-3" role="alert">
+                                @jsonSignError
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">Verify JSON Signature</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Identifier (optional)</label>
+                            <InputText @bind-Value="jsonVerifyIdentifier" class="form-control" placeholder="e.g., user-profile, transaction-123" />
+                            <small class="text-muted">Must match the identifier used when signing</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">JSON Data to Verify</label>
+                            <InputTextArea @bind-Value="jsonToVerify" class="form-control" rows="8" placeholder='{"key": "value"}' />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Paste Signature</label>
+                            <InputTextArea @bind-Value="jsonSignatureToVerify" class="form-control" rows="4" />
+                        </div>
+                        <button class="btn btn-success" @onclick="VerifyJsonSignature" disabled="@(!canVerifyJson || isVerifyingJson)">
+                            @if (isVerifyingJson)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            }
+                            Verify Signature
+                        </button>
+
+                        @if (jsonVerificationResult.HasValue)
+                        {
+                            @if (jsonVerificationResult.Value)
+                            {
+                                <div class="alert alert-success mt-3" role="alert">
+                                    <strong>✓ Valid Signature</strong>
+                                    <p class="mb-0">The JSON signature is valid and the data has not been modified.</p>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="alert alert-danger mt-3" role="alert">
+                                    <strong>✗ Invalid Signature</strong>
+                                    <p class="mb-0">The signature is invalid or the JSON has been modified.</p>
+                                </div>
+                            }
+                        }
+
+                        @if (!string.IsNullOrEmpty(jsonVerifyError))
+                        {
+                            <div class="alert alert-danger mt-3" role="alert">
+                                @jsonVerifyError
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- How It Works Section -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">How It Works</h5>
+                </div>
+                <div class="card-body">
+                    @if (activeTab == "document")
+                    {
+                        <ol>
+                            <li><strong>Sign:</strong> Upload a document and click "Sign Document". The system creates a cryptographic signature using your Keycloak identity and the document content.</li>
+                            <li><strong>Share:</strong> The signature can be shared separately from the document. It contains metadata about who signed it and when.</li>
+                            <li><strong>Verify:</strong> Anyone can verify the signature by uploading the original document and providing the signature. The system will confirm if the document has been modified.</li>
+                        </ol>
+                    }
+                    else
+                    {
+                        <ol>
+                            <li><strong>Sign:</strong> Enter valid JSON data and optionally provide an identifier. The system creates a cryptographic signature using your Keycloak identity and the JSON content.</li>
+                            <li><strong>Share:</strong> The signature can be shared separately from the JSON. It contains metadata about who signed it and when.</li>
+                            <li><strong>Verify:</strong> Anyone can verify the signature by providing the original JSON data and the signature. The system will confirm if the JSON has been modified.</li>
+                        </ol>
+                        <div class="alert alert-warning" role="alert">
+                            <strong>Note:</strong> JSON verification is whitespace-sensitive. Any changes to formatting, spacing, or key order will invalidate the signature.
+                        </div>
+                    }
+                    <p class="mb-0 text-muted">
+                        <strong>Note:</strong> This implementation uses your Keycloak access token to create verifiable signatures. 
+                        In a production environment, you would use Keycloak's signing keys directly for enhanced security.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string activeTab = "document";
+
+    // Document signing state
+    private IBrowserFile? selectedDocument;
+    private string selectedFileName = string.Empty;
+    private bool canSign => selectedDocument != null;
+    private bool isSigning = false;
+    private string signatureResult = string.Empty;
+    private string signedBy = string.Empty;
+    private string signedAt = string.Empty;
+    private string signError = string.Empty;
+
+    // Document verification state
+    private IBrowserFile? verifyDocument;
+    private string verifyFileName = string.Empty;
+    private string signatureToVerify = string.Empty;
+    private bool canVerify => verifyDocument != null && !string.IsNullOrWhiteSpace(signatureToVerify);
+    private bool isVerifying = false;
+    private bool? verificationResult = null;
+    private string verifyError = string.Empty;
+
+    // JSON signing state
+    private string jsonToSign = string.Empty;
+    private string jsonIdentifier = string.Empty;
+    private bool canSignJson => !string.IsNullOrWhiteSpace(jsonToSign);
+    private bool isSigningJson = false;
+    private string jsonSignatureResult = string.Empty;
+    private string jsonSignedBy = string.Empty;
+    private string jsonSignedAt = string.Empty;
+    private string jsonSignError = string.Empty;
+
+    // JSON verification state
+    private string jsonToVerify = string.Empty;
+    private string jsonVerifyIdentifier = string.Empty;
+    private string jsonSignatureToVerify = string.Empty;
+    private bool canVerifyJson => !string.IsNullOrWhiteSpace(jsonToVerify) && !string.IsNullOrWhiteSpace(jsonSignatureToVerify);
+    private bool isVerifyingJson = false;
+    private bool? jsonVerificationResult = null;
+    private string jsonVerifyError = string.Empty;
+
+    private void SetActiveTab(string tab)
+    {
+        activeTab = tab;
+    }
+
+    private void OnDocumentSelected(InputFileChangeEventArgs e)
+    {
+        selectedDocument = e.File;
+        selectedFileName = e.File.Name;
+        signatureResult = string.Empty;
+        signError = string.Empty;
+    }
+
+    private void OnVerifyDocumentSelected(InputFileChangeEventArgs e)
+    {
+        verifyDocument = e.File;
+        verifyFileName = e.File.Name;
+        verificationResult = null;
+        verifyError = string.Empty;
+    }
+
+    private async Task SignDocument()
+    {
+        if (selectedDocument == null) return;
+
+        isSigning = true;
+        signError = string.Empty;
+        signatureResult = string.Empty;
+
+        try
+        {
+            var accessToken = await GetAccessTokenAsync();
+            if (string.IsNullOrEmpty(accessToken))
+            {
+                signError = "Unable to retrieve access token. Please try logging in again.";
+                return;
+            }
+
+            // Read document data
+            using var memoryStream = new MemoryStream();
+            await selectedDocument.OpenReadStream(maxAllowedSize: 10485760).CopyToAsync(memoryStream);
+            var documentData = memoryStream.ToArray();
+
+            // Call service directly
+            var result = await SigningService.SignDocumentAsync(documentData, accessToken, selectedDocument.Name);
+
+            if (result.Success)
+            {
+                signatureResult = result.Signature;
+                signedBy = result.Metadata?.SignedBy ?? "Unknown";
+                signedAt = result.Metadata?.SignedAt.ToString("g") ?? "Unknown";
+            }
+            else
+            {
+                signError = result.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            signError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isSigning = false;
+        }
+    }
+
+    private async Task VerifySignature()
+    {
+        if (verifyDocument == null) return;
+
+        isVerifying = true;
+        verifyError = string.Empty;
+        verificationResult = null;
+
+        try
+        {
+            // Read document data
+            using var memoryStream = new MemoryStream();
+            await verifyDocument.OpenReadStream(maxAllowedSize: 10485760).CopyToAsync(memoryStream);
+            var documentData = memoryStream.ToArray();
+
+            // Call service directly
+            var isValid = await SigningService.VerifySignatureAsync(documentData, signatureToVerify, verifyDocument.Name);
+            verificationResult = isValid;
+        }
+        catch (Exception ex)
+        {
+            verifyError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isVerifying = false;
+        }
+    }
+
+    private async Task SignJson()
+    {
+        if (string.IsNullOrWhiteSpace(jsonToSign)) return;
+
+        isSigningJson = true;
+        jsonSignError = string.Empty;
+        jsonSignatureResult = string.Empty;
+
+        try
+        {
+            // Validate JSON format client-side
+            try
+            {
+                JsonDocument.Parse(jsonToSign);
+            }
+            catch (JsonException ex)
+            {
+                jsonSignError = $"Invalid JSON format: {ex.Message}";
+                return;
+            }
+
+            var accessToken = await GetAccessTokenAsync();
+            if (string.IsNullOrEmpty(accessToken))
+            {
+                jsonSignError = "Unable to retrieve access token. Please try logging in again.";
+                return;
+            }
+
+            // Call service directly
+            var identifier = string.IsNullOrWhiteSpace(jsonIdentifier) ? "json-data" : jsonIdentifier;
+            var result = await SigningService.SignJsonAsync(jsonToSign, accessToken, identifier);
+
+            if (result.Success)
+            {
+                jsonSignatureResult = result.Signature;
+                jsonSignedBy = result.Metadata?.SignedBy ?? "Unknown";
+                jsonSignedAt = result.Metadata?.SignedAt.ToString("g") ?? "Unknown";
+            }
+            else
+            {
+                jsonSignError = result.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            jsonSignError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isSigningJson = false;
+        }
+    }
+
+    private async Task VerifyJsonSignature()
+    {
+        if (string.IsNullOrWhiteSpace(jsonToVerify) || string.IsNullOrWhiteSpace(jsonSignatureToVerify)) return;
+
+        isVerifyingJson = true;
+        jsonVerifyError = string.Empty;
+        jsonVerificationResult = null;
+
+        try
+        {
+            // Validate JSON format client-side
+            try
+            {
+                JsonDocument.Parse(jsonToVerify);
+            }
+            catch (JsonException ex)
+            {
+                jsonVerifyError = $"Invalid JSON format: {ex.Message}";
+                return;
+            }
+
+            // Call service directly
+            var identifier = string.IsNullOrWhiteSpace(jsonVerifyIdentifier) ? "json-data" : jsonVerifyIdentifier;
+            var isValid = await SigningService.VerifyJsonSignatureAsync(jsonToVerify, jsonSignatureToVerify, identifier);
+            jsonVerificationResult = isValid;
+        }
+        catch (Exception ex)
+        {
+            jsonVerifyError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isVerifyingJson = false;
+        }
+    }
+
+    private async Task<string?> GetAccessTokenAsync()
+    {
+        var httpContext = HttpContextAccessor.HttpContext;
+        if (httpContext != null)
+        {
+            return await httpContext.GetTokenAsync("access_token");
+        }
+        return null;
+    }
+}
