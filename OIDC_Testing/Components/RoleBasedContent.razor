@@ -1,0 +1,32 @@
+@using Microsoft.AspNetCore.Authorization
+
+<AuthorizeView Roles="@Roles" Policy="@Policy">
+    <Authorized>
+        @ChildContent
+    </Authorized>
+    <NotAuthorized>
+        @if (ShowUnauthorizedMessage)
+        {
+            <div class="alert alert-warning" role="alert">
+                @UnauthorizedMessage
+            </div>
+        }
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public string? Roles { get; set; }
+
+    [Parameter]
+    public string? Policy { get; set; }
+
+    [Parameter]
+    public bool ShowUnauthorizedMessage { get; set; } = false;
+
+    [Parameter]
+    public string UnauthorizedMessage { get; set; } = "You do not have permission to view this content.";
+}

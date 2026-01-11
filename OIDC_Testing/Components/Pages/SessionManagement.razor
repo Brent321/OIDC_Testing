@@ -1,0 +1,177 @@
+﻿@page "/session"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authentication.Cookies
+@attribute [Authorize]
+@inject IHttpContextAccessor HttpContextAccessor
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Session Management</PageTitle>
+
+<div class="container mt-4">
+    <h1>Session Management</h1>
+    <p class="text-muted">Manage your authentication session</p>
+
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Session Information</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tbody>
+                            <tr>
+                                <th style="width: 200px;">Session ID</th>
+                                <td><code>@sessionId</code></td>
+                            </tr>
+                            <tr>
+                                <th>Authenticated</th>
+                                <td>
+                                    @if (isAuthenticated)
+                                    {
+                                        <span class="badge bg-success">Yes</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger">No</span>
+                                    }
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Authentication Scheme</th>
+                                <td>@authenticationScheme</td>
+                            </tr>
+                            <tr>
+                                <th>Session Started</th>
+                                <td>@sessionStartTime</td>
+                            </tr>
+                            <tr>
+                                <th>Cookie Expiration</th>
+                                <td>@cookieExpiration</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="mt-3">
+                        <h6>Available Tokens</h6>
+                        <ul class="list-unstyled">
+                            <li>
+                                @if (hasAccessToken)
+                                {
+                                    <span class="badge bg-success">✓</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">✗</span>
+                                }
+                                Access Token
+                            </li>
+                            <li>
+                                @if (hasIdToken)
+                                {
+                                    <span class="badge bg-success">✓</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">✗</span>
+                                }
+                                ID Token
+                            </li>
+                            <li>
+                                @if (hasRefreshToken)
+                                {
+                                    <span class="badge bg-success">✓</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">✗</span>
+                                }
+                                Refresh Token
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0">Session Actions</h5>
+                </div>
+                <div class="card-body">
+                    <p>Manage your current authentication session:</p>
+                    <div class="d-grid gap-2">
+                        <a href="/token-inspector" class="btn btn-primary">
+                            <i class="bi bi-eye"></i> View Tokens
+                        </a>
+                        <a href="/profile" class="btn btn-info">
+                            <i class="bi bi-person"></i> View Profile
+                        </a>
+                        <a href="/authentication/logout" class="btn btn-danger">
+                            <i class="bi bi-box-arrow-right"></i> Logout
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Security Tips</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="small">
+                        <li>Always log out when using shared computers</li>
+                        <li>Your session will expire automatically after inactivity</li>
+                        <li>Tokens are stored securely and encrypted</li>
+                        <li>Never share your authentication tokens</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string sessionId = "N/A";
+    private bool isAuthenticated = false;
+    private string authenticationScheme = "N/A";
+    private string sessionStartTime = "N/A";
+    private string cookieExpiration = "N/A";
+    private bool hasAccessToken = false;
+    private bool hasIdToken = false;
+    private bool hasRefreshToken = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var httpContext = HttpContextAccessor.HttpContext;
+        if (httpContext != null)
+        {
+            sessionId = httpContext.Session?.Id ?? httpContext.TraceIdentifier;
+            
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            isAuthenticated = authState.User.Identity?.IsAuthenticated ?? false;
+            authenticationScheme = authState.User.Identity?.AuthenticationType ?? "N/A";
+
+            // Check for tokens
+            hasAccessToken = !string.IsNullOrEmpty(await httpContext.GetTokenAsync("access_token"));
+            hasIdToken = !string.IsNullOrEmpty(await httpContext.GetTokenAsync("id_token"));
+            hasRefreshToken = !string.IsNullOrEmpty(await httpContext.GetTokenAsync("refresh_token"));
+
+            // Get session times from claims if available
+            var issuedClaim = authState.User.FindFirst(".issued");
+            if (issuedClaim != null && DateTimeOffset.TryParse(issuedClaim.Value, out var issued))
+            {
+                sessionStartTime = issued.ToLocalTime().ToString("g");
+            }
+
+            var expiresClaim = authState.User.FindFirst(".expires");
+            if (expiresClaim != null && DateTimeOffset.TryParse(expiresClaim.Value, out var expires))
+            {
+                cookieExpiration = expires.ToLocalTime().ToString("g");
+            }
+        }
+    }
+}

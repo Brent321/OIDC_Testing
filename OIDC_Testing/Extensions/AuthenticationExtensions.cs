@@ -29,23 +29,22 @@ public static class AuthenticationExtensions
         services.Configure<KeycloakOptions>(configuration.GetSection(KeycloakOptions.SectionName));
         services.Configure<Saml2ConfigurationOptions>(configuration.GetSection(Saml2ConfigurationOptions.SectionName));
 
-        var authMode = configuration["AuthenticationMode"]?.ToUpperInvariant() ?? "OIDC";
-
+        // Enable both authentication schemes simultaneously
         var authBuilder = services
             .AddAuthentication(options =>
             {
                 options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-                options.DefaultChallengeScheme = authMode == "SAML" ?
-                    Saml2Defaults.Scheme :
-                    OpenIdConnectDefaults.AuthenticationScheme;
+                // Don't set a default challenge scheme - let the controller choose explicitly
+                options.DefaultChallengeScheme = null;
             })
             .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
             {
-                options.Cookie.Name = $".AspNetCore.Cookies.{authMode}";
+                options.Cookie.Name = ".AspNetCore.Cookies";
                 options.ExpireTimeSpan = TimeSpan.FromHours(1);
                 options.SlidingExpiration = true;
             });
 
+        // Always add both authentication schemes
         authBuilder.AddOidcAuthentication();
         authBuilder.AddSamlAuthentication(environment);
 

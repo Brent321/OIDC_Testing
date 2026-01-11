@@ -1,0 +1,121 @@
+@page "/profile"
+@using Microsoft.AspNetCore.Authorization
+@using System.Security.Claims
+@attribute [Authorize]
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>User Profile</PageTitle>
+
+<div class="container mt-4">
+    <h1>User Profile</h1>
+    <p class="text-muted">Information retrieved from your identity provider</p>
+
+    <div class="row mt-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Profile Information</h5>
+                </div>
+                <div class="card-body">
+                    @if (user != null)
+                    {
+                        <table class="table table-striped">
+                            <tbody>
+                                <tr>
+                                    <th style="width: 200px;">Username</th>
+                                    <td>@user.Identity?.Name</td>
+                                </tr>
+                                <tr>
+                                    <th>Authentication Type</th>
+                                    <td>@user.Identity?.AuthenticationType</td>
+                                </tr>
+                                <tr>
+                                    <th>Is Authenticated</th>
+                                    <td>
+                                        @if (user.Identity?.IsAuthenticated == true)
+                                        {
+                                            <span class="badge bg-success">Yes</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-danger">No</span>
+                                        }
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <h6 class="mt-4">Roles</h6>
+                        @if (roles.Any())
+                        {
+                            <div class="d-flex flex-wrap gap-2">
+                                @foreach (var role in roles)
+                                {
+                                    <span class="badge bg-primary">@role</span>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted">No roles assigned</p>
+                        }
+                    }
+                </div>
+            </div>
+
+            <div class="card mt-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">All Claims</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Claim Type</th>
+                                    <th>Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var claim in claims.OrderBy(c => c.Type))
+                                {
+                                    <tr>
+                                        <td><code>@claim.Type</code></td>
+                                        <td>@claim.Value</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private ClaimsPrincipal? user;
+    private List<Claim> claims = new();
+    private List<string> roles = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        user = authState.User;
+
+        if (user?.Identity?.IsAuthenticated == true)
+        {
+            claims = user.Claims.ToList();
+            
+            // Cast to ClaimsIdentity to access RoleClaimType
+            var claimsIdentity = user.Identity as ClaimsIdentity;
+            var roleClaimType = claimsIdentity?.RoleClaimType ?? ClaimTypes.Role;
+            
+            roles = user.Claims
+                .Where(c => c.Type == roleClaimType || c.Type == "role" || c.Type == ClaimTypes.Role)
+                .Select(c => c.Value)
+                .Distinct()
+                .ToList();
+        }
+    }
+}

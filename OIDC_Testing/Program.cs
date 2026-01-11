@@ -8,6 +8,16 @@ builder.Services.AddCustomAuthorization();
 builder.Services.AddControllers();
 builder.Services.AddBlazorServices();
 
+// Add session services
+builder.Services.AddDistributedMemoryCache();
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromHours(1);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+});
+
 var app = builder.Build();
 
 if (!app.Environment.IsDevelopment())
@@ -20,6 +30,9 @@ app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Enable session middleware
+app.UseSession();
 
 app.UseCustomStatusCodePages();
 

@@ -1,0 +1,180 @@
+@page "/token-inspector"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Authentication
+@using System.IdentityModel.Tokens.Jwt
+@using System.Text.Json
+@attribute [Authorize]
+@inject IHttpContextAccessor HttpContextAccessor
+
+<PageTitle>Token Inspector</PageTitle>
+
+<div class="container mt-4">
+    <h1>Token Inspector</h1>
+    <p class="text-muted">View and decode your authentication tokens</p>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-warning" role="alert">
+            @errorMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(accessToken))
+    {
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Access Token</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label"><strong>Raw Token</strong></label>
+                            <textarea class="form-control font-monospace" rows="5" readonly>@accessToken</textarea>
+                        </div>
+                        
+                        @if (decodedToken != null)
+                        {
+                            <h6>Decoded Header</h6>
+                            <pre class="bg-light p-3 rounded"><code>@FormatJson(decodedToken.Header)</code></pre>
+                            
+                            <h6 class="mt-3">Decoded Payload</h6>
+                            <pre class="bg-light p-3 rounded"><code>@FormatJson(decodedToken.Payload)</code></pre>
+                            
+                            <h6 class="mt-3">Token Information</h6>
+                            <table class="table table-sm">
+                                <tbody>
+                                    <tr>
+                                        <th style="width: 200px;">Issuer</th>
+                                        <td>@decodedToken.Issuer</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Valid From</th>
+                                        <td>@decodedToken.ValidFrom.ToLocalTime()</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Valid To</th>
+                                        <td>@decodedToken.ValidTo.ToLocalTime()</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Time Until Expiry</th>
+                                        <td>
+                                            @if (timeUntilExpiry.HasValue)
+                                            {
+                                                @if (timeUntilExpiry.Value.TotalMinutes > 0)
+                                                {
+                                                    <span class="badge bg-success">@timeUntilExpiry.Value.ToString(@"hh\:mm\:ss")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-danger">Expired</span>
+                                                }
+                                            }
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(idToken))
+    {
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">ID Token</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label"><strong>Raw Token</strong></label>
+                            <textarea class="form-control font-monospace" rows="5" readonly>@idToken</textarea>
+                        </div>
+                        
+                        @if (decodedIdToken != null)
+                        {
+                            <h6>Decoded Payload</h6>
+                            <pre class="bg-light p-3 rounded"><code>@FormatJson(decodedIdToken.Payload)</code></pre>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(refreshToken))
+    {
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">Refresh Token</h5>
+                    </div>
+                    <div class="card-body">
+                        <textarea class="form-control font-monospace" rows="3" readonly>@refreshToken</textarea>
+                        <small class="text-muted">Refresh tokens are typically opaque and cannot be decoded.</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private string? accessToken;
+    private string? idToken;
+    private string? refreshToken;
+    private string errorMessage = string.Empty;
+    private JwtSecurityToken? decodedToken;
+    private JwtSecurityToken? decodedIdToken;
+    private TimeSpan? timeUntilExpiry;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var httpContext = HttpContextAccessor.HttpContext;
+            if (httpContext != null)
+            {
+                accessToken = await httpContext.GetTokenAsync("access_token");
+                idToken = await httpContext.GetTokenAsync("id_token");
+                refreshToken = await httpContext.GetTokenAsync("refresh_token");
+
+                if (!string.IsNullOrEmpty(accessToken))
+                {
+                    var handler = new JwtSecurityTokenHandler();
+                    decodedToken = handler.ReadJwtToken(accessToken);
+                    timeUntilExpiry = decodedToken.ValidTo - DateTime.UtcNow;
+                }
+
+                if (!string.IsNullOrEmpty(idToken))
+                {
+                    var handler = new JwtSecurityTokenHandler();
+                    decodedIdToken = handler.ReadJwtToken(idToken);
+                }
+
+                if (string.IsNullOrEmpty(accessToken) && string.IsNullOrEmpty(idToken))
+                {
+                    errorMessage = "No tokens found. This may occur if SaveTokens is not enabled in your authentication configuration.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error retrieving tokens: {ex.Message}";
+        }
+    }
+
+    private string FormatJson(object obj)
+    {
+        var json = JsonSerializer.Serialize(obj, new JsonSerializerOptions 
+        { 
+            WriteIndented = true 
+        });
+        return json;
+    }
+}
