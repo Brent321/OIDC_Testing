@@ -1,0 +1,148 @@
+@page "/admin/configuration"
+@using IDP_Testing.Services
+@using IDP_Testing.Models
+@attribute [Authorize(Roles = "Admin")]
+@inject IConfigurationService ConfigService
+@inject IConfiguration Configuration
+
+<PageTitle>Configuration Management</PageTitle>
+
+<h3>Configuration Management</h3>
+
+<div class="mb-3">
+    <button class="btn btn-success" @onclick="ShowAddModal">Add New</button>
+    <button class="btn btn-warning" @onclick="ReloadConfiguration">Reload Configuration</button>
+    <button class="btn btn-danger" @onclick="ResetToAppSettings">Reset to AppSettings</button>
+</div>
+
+@if (configurations == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Key</th>
+                <th>Value</th>
+                <th>Last Modified</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var config in configurations)
+            {
+                <tr>
+                    <td>@config.Key</td>
+                    <td>@config.Value</td>
+                    <td>@config.LastModified.ToString("g")</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" @onclick="() => ShowEditModal(config)">Edit</button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => DeleteConfiguration(config)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (showModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(isEdit ? "Edit" : "Add") Configuration</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Key</label>
+                        <input type="text" class="form-control" @bind="currentKey" disabled="@isEdit" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Value</label>
+                        <input type="text" class="form-control" @bind="currentValue" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveConfiguration">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ConfigurationEntry>? configurations;
+    private bool showModal = false;
+    private bool isEdit = false;
+    private string currentKey = string.Empty;
+    private string? currentValue;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadConfigurations();
+    }
+
+    private async Task LoadConfigurations()
+    {
+        configurations = await ConfigService.GetAllAsync();
+    }
+
+    private void ShowAddModal()
+    {
+        isEdit = false;
+        currentKey = string.Empty;
+        currentValue = null;
+        showModal = true;
+    }
+
+    private void ShowEditModal(ConfigurationEntry config)
+    {
+        isEdit = true;
+        currentKey = config.Key;
+        currentValue = config.Value;
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+    }
+
+    private async Task SaveConfiguration()
+    {
+        if (string.IsNullOrWhiteSpace(currentKey))
+            return;
+
+        await ConfigService.AddOrUpdateAsync(currentKey, currentValue);
+        await LoadConfigurations();
+        CloseModal();
+    }
+
+    private async Task DeleteConfiguration(ConfigurationEntry config)
+    {
+        await ConfigService.DeleteAsync(config.Key);
+        await LoadConfigurations();
+    }
+
+    private async Task ReloadConfiguration()
+    {
+        await ConfigService.ReloadConfigurationAsync();
+        await LoadConfigurations();
+    }
+
+    private async Task ResetToAppSettings()
+    {
+        if (await JSRuntime.InvokeAsync<bool>("confirm", "This will delete all database configurations and reload from appsettings. Continue?"))
+        {
+            await ConfigService.ResetFromAppSettingsAsync();
+            await LoadConfigurations();
+        }
+    }
+}
+
+@inject IJSRuntime JSRuntime
