@@ -1,4 +1,7 @@
 ﻿@page "/"
+@using IDP_Testing.Configuration
+@using Microsoft.Extensions.Options
+@inject IOptions<AuthenticationModeOptions> AuthModeOptions
 
 <PageTitle>Home</PageTitle>
 
@@ -12,54 +15,41 @@
                 <p>Username: <strong>@context.User.Identity?.Name</strong></p>
                 <p>Authentication Type: <strong>@context.User.Identity?.AuthenticationType</strong></p>
                 <a href="/profile" class="btn btn-primary">View Profile</a>
-                <a href="/authentication/logout" class="btn btn-secondary">Logout</a>
+                <a href="/authentication/logout" class="btn btn-secondary" data-enhance-nav="false">Logout</a>
             </div>
         </Authorized>
         <NotAuthorized>
             <div class="alert alert-info">
                 <h4>You are not authenticated</h4>
-                <p>Please choose an authentication method:</p>
+                <p>This application uses <strong>@AuthModeOptions.Value.GetDisplayName()</strong> for authentication.</p>
                 
-                <div class="row g-3 mt-3">
-                    <div class="col-md-4">
-                        <div class="card h-100">
-                            <div class="card-body">
-                                <h5 class="card-title">
-                                    <i class="bi bi-key-fill"></i> OpenID Connect (Keycloak)
-                                </h5>
-                                <p class="card-text">OAuth 2.0 / OIDC with Authorization Code Flow</p>
-                                <a href="/authentication/login?authMode=oidc" class="btn btn-primary w-100">
-                                    Login with OIDC
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-md-4">
-                        <div class="card h-100">
-                            <div class="card-body">
-                                <h5 class="card-title">
-                                    <i class="bi bi-shield-check"></i> SAML 2.0
-                                </h5>
-                                <p class="card-text">Security Assertion Markup Language</p>
-                                <a href="/authentication/login?authMode=saml" class="btn btn-success w-100">
-                                    Login with SAML
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-md-4">
-                        <div class="card h-100">
-                            <div class="card-body">
-                                <h5 class="card-title">
-                                    <i class="bi bi-building"></i> WS-Federation (ADFS)
-                                </h5>
-                                <p class="card-text">Windows Identity Foundation</p>
-                                <a href="/authentication/login?authMode=wsfed" class="btn btn-warning w-100">
-                                    Login with WS-Fed
-                                </a>
-                            </div>
+                <div class="mt-4">
+                    <div class="card">
+                        <div class="card-body text-center">
+                            @switch (AuthModeOptions.Value.Mode.ToUpperInvariant())
+                            {
+                                case "OIDC":
+                                    <h5 class="card-title">
+                                        <i class="bi bi-key-fill"></i> OpenID Connect
+                                    </h5>
+                                    <p class="card-text">OAuth 2.0 / OIDC with Authorization Code Flow</p>
+                                    break;
+                                case "SAML":
+                                    <h5 class="card-title">
+                                        <i class="bi bi-shield-check"></i> SAML 2.0
+                                    </h5>
+                                    <p class="card-text">Security Assertion Markup Language</p>
+                                    break;
+                                case "WSFED":
+                                    <h5 class="card-title">
+                                        <i class="bi bi-building"></i> WS-Federation
+                                    </h5>
+                                    <p class="card-text">Windows Identity Foundation / Azure AD</p>
+                                    break;
+                            }
+                            <a href="/authentication/login" class="btn btn-primary btn-lg mt-3" data-enhance-nav="false">
+                                Sign In
+                            </a>
                         </div>
                     </div>
                 </div>

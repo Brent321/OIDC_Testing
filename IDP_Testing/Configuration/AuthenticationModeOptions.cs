@@ -2,10 +2,15 @@ namespace IDP_Testing.Configuration;
 
 public class AuthenticationModeOptions
 {
-    public const string SectionName = "AuthenticationMode";
+    public const string SectionName = "Authentication";
 
-    public string Mode { get; set; } = "OIDC";
+    public string Mode { get; set; } = "OIDC"; // OIDC, SAML, or WSFED
 
-    public bool IsSaml => Mode?.Equals("SAML", StringComparison.OrdinalIgnoreCase) == true;
-    public bool IsOidc => !IsSaml;
+    public string GetDisplayName() => Mode.ToUpperInvariant() switch
+    {
+        "OIDC" => "OpenID Connect",
+        "SAML" => "SAML 2.0",
+        "WSFED" => "WS-Federation",
+        _ => "Unknown"
+    };
 }

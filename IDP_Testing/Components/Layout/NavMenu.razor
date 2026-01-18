@@ -4,7 +4,7 @@
         <AuthorizeView>
             <Authorized>
                 <span class="text-light me-3">Hello, @context.User.Identity?.Name</span>
-                <a class="btn btn-outline-light btn-sm" href="/authentication/logout">Log out</a>
+                <a class="btn btn-outline-light btn-sm" href="/authentication/logout" data-enhance-nav="false">Log out</a>
             </Authorized>
             <NotAuthorized>
                 <a class="btn btn-outline-light btn-sm" href="/authentication/login" data-enhance-nav="false">Log in</a>

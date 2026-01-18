@@ -16,7 +16,6 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography.X509Certificates;
 
-
 namespace IDP_Testing.Extensions;
 
 public static class AuthenticationExtensions
@@ -27,16 +26,22 @@ public static class AuthenticationExtensions
         var environment = builder.Environment;
 
         // Register configuration options
+        services.Configure<AuthenticationModeOptions>(configuration.GetSection(AuthenticationModeOptions.SectionName));
         services.Configure<KeycloakOptions>(configuration.GetSection(KeycloakOptions.SectionName));
         services.Configure<Saml2ConfigurationOptions>(configuration.GetSection(Saml2ConfigurationOptions.SectionName));
         services.Configure<WsFederationConfigOptions>(configuration.GetSection(WsFederationConfigOptions.SectionName));
 
-        // Enable all authentication schemes simultaneously
+        // Get the configured authentication mode
+        var authMode = configuration.GetSection(AuthenticationModeOptions.SectionName).Get<AuthenticationModeOptions>()?.Mode ?? "OIDC";
+        
+        Console.WriteLine($"Configuring authentication with mode: {authMode}");
+
+        // Base authentication with cookies
         var authBuilder = services
             .AddAuthentication(options =>
             {
                 options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-                options.DefaultChallengeScheme = null; // Let controllers choose explicitly
+                options.DefaultChallengeScheme = GetChallengeScheme(authMode);
             })
             .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
             {
@@ -45,15 +50,61 @@ public static class AuthenticationExtensions
                 options.SlidingExpiration = true;
                 options.Cookie.SameSite = SameSiteMode.Lax;
                 options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+
+                // Preserve the original authentication type
+                options.Events.OnSigningIn = context =>
+                {
+                    if (context.Principal?.Identity is ClaimsIdentity identity)
+                    {
+                        // Determine the authentication scheme from the authentication properties or ticket
+                        string? scheme = null;
+                        context.Properties?.Items.TryGetValue(".AuthScheme", out scheme);
+                        scheme ??= identity.AuthenticationType;
+
+                        if (!string.IsNullOrEmpty(scheme))
+                        {
+                            // Create a new identity with the original authentication type
+                            var newIdentity = new ClaimsIdentity(
+                                identity.Claims,
+                                scheme,
+                                identity.NameClaimType,
+                                identity.RoleClaimType);
+
+                            context.Principal = new ClaimsPrincipal(newIdentity);
+                            Console.WriteLine($"Cookie OnSigningIn: Preserved authentication type as '{scheme}'");
+                        }
+                    }
+
+                    return Task.CompletedTask;
+                };
             });
 
-        // Add all authentication schemes
-        authBuilder.AddOidcAuthentication();
-        authBuilder.AddSamlAuthentication(environment);
-        authBuilder.AddWsFedAuthentication(); // NEW
+        // Add only the configured authentication scheme
+        switch (authMode.ToUpperInvariant())
+        {
+            case "OIDC":
+                authBuilder.AddOidcAuthentication();
+                break;
+            case "SAML":
+                authBuilder.AddSamlAuthentication(environment);
+                break;
+            case "WSFED":
+                authBuilder.AddWsFedAuthentication();
+                break;
+            default:
+                throw new InvalidOperationException($"Unknown authentication mode: {authMode}. Valid values are: OIDC, SAML, WSFED");
+        }
 
         return services;
     }
+
+    private static string? GetChallengeScheme(string authMode) => authMode.ToUpperInvariant() switch
+    {
+        "OIDC" => OpenIdConnectDefaults.AuthenticationScheme,
+        "SAML" => Saml2Defaults.Scheme,
+        "WSFED" => WsFederationDefaults.AuthenticationScheme,
+        _ => null
+    };
 
     private static AuthenticationBuilder AddOidcAuthentication(this AuthenticationBuilder authBuilder)
     {
@@ -92,7 +143,6 @@ public static class AuthenticationExtensions
                 // Handle redirect to identity provider for login
                 oidcOptions.Events.OnRedirectToIdentityProvider = context =>
                 {
-                    // Check if we want to force re-authentication
                     if (context.Properties.Items.TryGetValue("prompt", out var promptValue))
                     {
                         context.ProtocolMessage.Prompt = promptValue;
@@ -106,7 +156,6 @@ public static class AuthenticationExtensions
                 {
                     Console.WriteLine($"🔍 Event fired - Properties.Items count: {context.Properties?.Items?.Count ?? 0}");
     
-                    // Try to get the id_token from Items first (passed from controller)
                     string? idToken = null;
     
                     if (context.Properties?.Items?.TryGetValue("id_token", out var itemToken) == true)
@@ -115,7 +164,6 @@ public static class AuthenticationExtensions
                         Console.WriteLine("Found id_token in Items");
                     }
     
-                    // Set the id_token_hint if we have it
                     if (!string.IsNullOrWhiteSpace(idToken))
                     {
                         context.ProtocolMessage.IdTokenHint = idToken;
@@ -126,7 +174,6 @@ public static class AuthenticationExtensions
                         Console.WriteLine("⚠️ Warning: id_token not found during logout");
                     }
 
-                    // Ensure post_logout_redirect_uri is set
                     if (string.IsNullOrEmpty(context.ProtocolMessage.PostLogoutRedirectUri))
                     {
                         context.ProtocolMessage.PostLogoutRedirectUri = keycloakOptions.PostLogoutRedirectUri;
@@ -135,20 +182,34 @@ public static class AuthenticationExtensions
                     return Task.CompletedTask;
                 };
 
-                // Handle token validation
+                // Handle token validation - explicitly set authentication type
                 oidcOptions.Events.OnTokenValidated = context =>
                 {
                     if (context.Principal?.Identity is ClaimsIdentity identity)
                     {
+                        // Create a new identity with explicit authentication type
+                        var newIdentity = new ClaimsIdentity(
+                            identity.Claims,
+                            OpenIdConnectDefaults.AuthenticationScheme,
+                            identity.NameClaimType,
+                            identity.RoleClaimType);
+
                         var accessToken = context.TokenEndpointResponse?.AccessToken;
                         if (!string.IsNullOrWhiteSpace(accessToken))
                         {
                             var handler = new JwtSecurityTokenHandler();
                             var accessJwt = handler.ReadJwtToken(accessToken);
 
-                            KeycloakRoleMapper.AddRealmRoles(accessJwt, identity);
-                            KeycloakRoleMapper.AddClientRoles(accessJwt, identity, keycloakOptions.ClientId);
+                            KeycloakRoleMapper.AddRealmRoles(accessJwt, newIdentity);
+                            KeycloakRoleMapper.AddClientRoles(accessJwt, newIdentity, keycloakOptions.ClientId);
                         }
+
+                        context.Principal = new ClaimsPrincipal(newIdentity);
+                        
+                        // Store the authentication scheme for the cookie handler
+                        context.Properties!.Items[".AuthScheme"] = OpenIdConnectDefaults.AuthenticationScheme;
+                        
+                        Console.WriteLine($"OIDC OnTokenValidated: Set authentication type to '{OpenIdConnectDefaults.AuthenticationScheme}'");
                     }
 
                     return Task.CompletedTask;
@@ -177,14 +238,12 @@ public static class AuthenticationExtensions
                 saml2Options.SPOptions.EntityId = new EntityId(saml2ConfigOptions.EntityId);
                 saml2Options.SPOptions.ReturnUrl = new Uri(saml2ConfigOptions.EntityId);
 
-                // Disable request signing in development
                 if (environment.IsDevelopment())
                 {
                     saml2Options.SPOptions.AuthenticateRequestSigningBehavior = SigningBehavior.Never;
                 }
                 else
                 {
-                    // In production, check if a certificate is configured
                     if (!string.IsNullOrWhiteSpace(saml2ConfigOptions.SigningCertificatePath) &&
                         File.Exists(saml2ConfigOptions.SigningCertificatePath))
                     {
@@ -215,7 +274,6 @@ public static class AuthenticationExtensions
                     WantAuthnRequestsSigned = false
                 };
 
-                // Try to load metadata, but continue if it fails
                 try
                 {
                     idp.MetadataLocation = saml2ConfigOptions.IdpMetadataUrl;
@@ -232,6 +290,14 @@ public static class AuthenticationExtensions
                 {
                     if (result.Principal?.Identity is ClaimsIdentity identity)
                     {
+                        // Create a new ClaimsIdentity with the correct authentication type
+                        var newIdentity = new ClaimsIdentity(
+                            identity.Claims,
+                            Saml2Defaults.Scheme,
+                            identity.NameClaimType,
+                            identity.RoleClaimType);
+
+                        // Process role claims
                         var roleClaims = identity.FindAll("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
                             .Concat(identity.FindAll("Role"))
                             .ToList();
@@ -240,9 +306,16 @@ public static class AuthenticationExtensions
                         {
                             if (!string.IsNullOrWhiteSpace(roleClaim.Value))
                             {
-                                identity.AddClaim(new Claim(identity.RoleClaimType ?? ClaimTypes.Role, roleClaim.Value));
+                                newIdentity.AddClaim(new Claim(newIdentity.RoleClaimType ?? ClaimTypes.Role, roleClaim.Value));
                             }
                         }
+
+                        // Add a claim to mark the authentication scheme for the cookie handler
+                        newIdentity.AddClaim(new Claim(".AuthScheme", Saml2Defaults.Scheme));
+
+                        result.Principal = new ClaimsPrincipal(newIdentity);
+                        
+                        Console.WriteLine($"SAML AcsCommandResultCreated: Set authentication type to '{Saml2Defaults.Scheme}'");
                     }
                 };
             })
@@ -256,27 +329,37 @@ public static class AuthenticationExtensions
             .Services.AddOptions<Microsoft.AspNetCore.Authentication.WsFederation.WsFederationOptions>(WsFederationDefaults.AuthenticationScheme)
             .Configure<IOptions<WsFederationConfigOptions>>((wsFedOptions, wsFedConfigOptionsAccessor) =>
             {
-                var wsFedConfig = wsFedConfigOptionsAccessor.Value;
+                var wsFedConfigOptions = wsFedConfigOptionsAccessor.Value;
 
-                wsFedOptions.MetadataAddress = wsFedConfig.MetadataAddress;
-                wsFedOptions.Wtrealm = wsFedConfig.Wtrealm;
-                wsFedOptions.RequireHttpsMetadata = wsFedConfig.RequireHttpsMetadata;
-                wsFedOptions.SaveTokens = wsFedConfig.SaveTokens;
-                wsFedOptions.CallbackPath = wsFedConfig.CallbackPath;
-                wsFedOptions.RemoteSignOutPath = wsFedConfig.RemoteSignOutPath;
-
-                // Map claims
-                wsFedOptions.TokenValidationParameters.NameClaimType = ClaimTypes.Name;
+                wsFedOptions.MetadataAddress = wsFedConfigOptions.MetadataAddress;
+                wsFedOptions.Wtrealm = wsFedConfigOptions.Wtrealm;
+                wsFedOptions.RequireHttpsMetadata = wsFedConfigOptions.RequireHttpsMetadata;
+                wsFedOptions.SaveTokens = wsFedConfigOptions.SaveTokens;
+                wsFedOptions.CallbackPath = wsFedConfigOptions.CallbackPath;
+                wsFedOptions.RemoteSignOutPath = wsFedConfigOptions.RemoteSignOutPath;
+                
+                wsFedOptions.TokenValidationParameters.NameClaimType = "name";
                 wsFedOptions.TokenValidationParameters.RoleClaimType = ClaimTypes.Role;
-
-                // Handle token validation
+                
                 wsFedOptions.Events.OnSecurityTokenValidated = context =>
                 {
                     if (context.Principal?.Identity is ClaimsIdentity identity)
                     {
-                        // Add any custom claim transformations here
-                        Debug.WriteLine($"WS-Fed user authenticated: {identity.Name}");
+                        // Create a new identity with explicit authentication type
+                        var newIdentity = new ClaimsIdentity(
+                            identity.Claims,
+                            WsFederationDefaults.AuthenticationScheme,
+                            identity.NameClaimType,
+                            identity.RoleClaimType);
+
+                        context.Principal = new ClaimsPrincipal(newIdentity);
+                        
+                        // Store the authentication scheme for the cookie handler
+                        context.Properties!.Items[".AuthScheme"] = WsFederationDefaults.AuthenticationScheme;
+                        
+                        Console.WriteLine($"WsFed OnSecurityTokenValidated: Set authentication type to '{WsFederationDefaults.AuthenticationScheme}'");
                     }
+
                     return Task.CompletedTask;
                 };
             })
