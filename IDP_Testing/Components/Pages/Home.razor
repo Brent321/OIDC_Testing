@@ -1,127 +1,65 @@
 ﻿@page "/"
-@using Microsoft.AspNetCore.Components.Authorization
 
 <PageTitle>Home</PageTitle>
 
 <div class="container mt-4">
-    <h1>IDP Authentication & Authorization Demo</h1>
-
+    <h1>Welcome to IDP Testing</h1>
+    
     <AuthorizeView>
         <Authorized>
-            <div class="alert alert-success" role="alert">
-                <h4 class="alert-heading">Welcome, @context.User.Identity?.Name!</h4>
-                <p>You are successfully authenticated via <strong>@context.User.Identity?.AuthenticationType</strong>.</p>
-                <hr>
-                <p class="mb-0">
-                    Explore the application to see authentication and authorization in action.
-                </p>
+            <div class="alert alert-success">
+                <h4>You are authenticated!</h4>
+                <p>Username: <strong>@context.User.Identity?.Name</strong></p>
+                <p>Authentication Type: <strong>@context.User.Identity?.AuthenticationType</strong></p>
+                <a href="/profile" class="btn btn-primary">View Profile</a>
+                <a href="/authentication/logout" class="btn btn-secondary">Logout</a>
             </div>
-
-            <div class="row mt-4">
-                <div class="col-md-4">
-                    <div class="card">
-                        <div class="card-body text-center">
-                            <i class="bi bi-person-circle" style="font-size: 3rem;"></i>
-                            <h5 class="card-title mt-3">Your Profile</h5>
-                            <p class="card-text">View your user information and claims from the identity provider.</p>
-                            <a href="/profile" class="btn btn-primary">View Profile</a>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-md-4">
-                    <div class="card">
-                        <div class="card-body text-center">
-                            <i class="bi bi-key-fill" style="font-size: 3rem;"></i>
-                            <h5 class="card-title mt-3">Token Inspector</h5>
-                            <p class="card-text">Decode and inspect your JWT access and ID tokens.</p>
-                            <a href="/token-inspector" class="btn btn-primary">Inspect Tokens</a>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-md-4">
-                    <div class="card">
-                        <div class="card-body text-center">
-                            <i class="bi bi-clock-history" style="font-size: 3rem;"></i>
-                            <h5 class="card-title mt-3">Session Info</h5>
-                            <p class="card-text">View and manage your authentication session details.</p>
-                            <a href="/session" class="btn btn-primary">View Session</a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="row mt-4">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header bg-info text-white">
-                            <h5 class="mb-0">Features Demonstrated</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <h6>Authentication</h6>
-                                    <ul>
-                                        <li>✅ OpenID Connect (OIDC) with Keycloak</li>
-                                        <li>✅ SAML 2.0 Authentication</li>
-                                        <li>✅ JWT Token Management</li>
-                                        <li>✅ Refresh Token Support</li>
-                                        <li>✅ Cookie-based Sessions</li>
-                                    </ul>
-                                </div>
-                                <div class="col-md-6">
-                                    <h6>Authorization</h6>
-                                    <ul>
-                                        <li>✅ Role-Based Access Control (RBAC)</li>
-                                        <li>✅ Policy-Based Authorization</li>
-                                        <li>✅ Claims-Based Authorization</li>
-                                        <li>✅ Protected Pages & Components</li>
-                                        <li>✅ Conditional UI Rendering</li>
-                                    </ul>
-                                </div>
+        </Authorized>
+        <NotAuthorized>
+            <div class="alert alert-info">
+                <h4>You are not authenticated</h4>
+                <p>Please choose an authentication method:</p>
+                
+                <div class="row g-3 mt-3">
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="bi bi-key-fill"></i> OpenID Connect (Keycloak)
+                                </h5>
+                                <p class="card-text">OAuth 2.0 / OIDC with Authorization Code Flow</p>
+                                <a href="/authentication/login?authMode=oidc" class="btn btn-primary w-100">
+                                    Login with OIDC
+                                </a>
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            <RoleBasedContent Roles="app-admin" ShowUnauthorizedMessage="false">
-                <div class="alert alert-warning mt-4" role="alert">
-                    <h5><i class="bi bi-shield-lock"></i> Admin Access Detected</h5>
-                    <p>You have administrative privileges. You can access the <a href="/admin" class="alert-link">Admin Dashboard</a>.</p>
-                </div>
-            </RoleBasedContent>
-        </Authorized>
-        <NotAuthorized>
-            <div class="alert alert-info" role="alert">
-                <h4 class="alert-heading">Welcome to IDP Auth Demo!</h4>
-                <p>This application demonstrates authentication and authorization using Identity Providers (IDPs).</p>
-                <hr>
-                <p class="mb-3">Choose your authentication method:</p>
-                <div class="d-flex gap-2">
-                    <a href="/authentication/login-oidc" class="btn btn-primary">
-                        <i class="bi bi-shield-check"></i> Login with OIDC (Keycloak)
-                    </a>
-                    <a href="/authentication/login-saml" class="btn btn-success">
-                        <i class="bi bi-shield-lock"></i> Login with SAML
-                    </a>
-                </div>
-            </div>
-
-            <div class="card mt-4">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Supported Authentication Methods</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <h6><i class="bi bi-shield-check"></i> OpenID Connect (OIDC)</h6>
-                            <p class="small">Modern authentication protocol using Keycloak as the identity provider.</p>
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="bi bi-shield-check"></i> SAML 2.0
+                                </h5>
+                                <p class="card-text">Security Assertion Markup Language</p>
+                                <a href="/authentication/login?authMode=saml" class="btn btn-success w-100">
+                                    Login with SAML
+                                </a>
+                            </div>
                         </div>
-                        <div class="col-md-6">
-                            <h6><i class="bi bi-shield-lock"></i> SAML 2.0</h6>
-                            <p class="small">Enterprise-grade authentication using SAML assertions.</p>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="bi bi-building"></i> WS-Federation (ADFS)
+                                </h5>
+                                <p class="card-text">Windows Identity Foundation</p>
+                                <a href="/authentication/login?authMode=wsfed" class="btn btn-warning w-100">
+                                    Login with WS-Fed
+                                </a>
+                            </div>
                         </div>
                     </div>
                 </div>

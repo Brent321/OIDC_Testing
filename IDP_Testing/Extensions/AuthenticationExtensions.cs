@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Authentication.WsFederation;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using IDP_Testing.Configuration;
@@ -28,14 +29,14 @@ public static class AuthenticationExtensions
         // Register configuration options
         services.Configure<KeycloakOptions>(configuration.GetSection(KeycloakOptions.SectionName));
         services.Configure<Saml2ConfigurationOptions>(configuration.GetSection(Saml2ConfigurationOptions.SectionName));
+        services.Configure<WsFederationConfigOptions>(configuration.GetSection(WsFederationConfigOptions.SectionName));
 
-        // Enable both authentication schemes simultaneously
+        // Enable all authentication schemes simultaneously
         var authBuilder = services
             .AddAuthentication(options =>
             {
                 options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-                // Don't set a default challenge scheme - let the controller choose explicitly
-                options.DefaultChallengeScheme = null;
+                options.DefaultChallengeScheme = null; // Let controllers choose explicitly
             })
             .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
             {
@@ -46,9 +47,10 @@ public static class AuthenticationExtensions
                 options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
             });
 
-        // Always add both authentication schemes
+        // Add all authentication schemes
         authBuilder.AddOidcAuthentication();
         authBuilder.AddSamlAuthentication(environment);
+        authBuilder.AddWsFedAuthentication(); // NEW
 
         return services;
     }
@@ -226,6 +228,40 @@ public static class AuthenticationExtensions
                             }
                         }
                     }
+                };
+            })
+            .Services
+            .AddAuthentication();
+    }
+
+    private static AuthenticationBuilder AddWsFedAuthentication(this AuthenticationBuilder authBuilder)
+    {
+        return authBuilder.AddWsFederation(WsFederationDefaults.AuthenticationScheme, options => { })
+            .Services.AddOptions<Microsoft.AspNetCore.Authentication.WsFederation.WsFederationOptions>(WsFederationDefaults.AuthenticationScheme)
+            .Configure<IOptions<WsFederationConfigOptions>>((wsFedOptions, wsFedConfigOptionsAccessor) =>
+            {
+                var wsFedConfig = wsFedConfigOptionsAccessor.Value;
+
+                wsFedOptions.MetadataAddress = wsFedConfig.MetadataAddress;
+                wsFedOptions.Wtrealm = wsFedConfig.Wtrealm;
+                wsFedOptions.RequireHttpsMetadata = wsFedConfig.RequireHttpsMetadata;
+                wsFedOptions.SaveTokens = wsFedConfig.SaveTokens;
+                wsFedOptions.CallbackPath = wsFedConfig.CallbackPath;
+                wsFedOptions.RemoteSignOutPath = wsFedConfig.RemoteSignOutPath;
+
+                // Map claims
+                wsFedOptions.TokenValidationParameters.NameClaimType = ClaimTypes.Name;
+                wsFedOptions.TokenValidationParameters.RoleClaimType = ClaimTypes.Role;
+
+                // Handle token validation
+                wsFedOptions.Events.OnSecurityTokenValidated = context =>
+                {
+                    if (context.Principal?.Identity is ClaimsIdentity identity)
+                    {
+                        // Add any custom claim transformations here
+                        Debug.WriteLine($"WS-Fed user authenticated: {identity.Name}");
+                    }
+                    return Task.CompletedTask;
                 };
             })
             .Services
