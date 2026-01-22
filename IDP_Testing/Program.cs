@@ -65,10 +65,7 @@ builder.Services.AddSession(options =>
 builder.Services.AddAntiforgery();
 
 // Configure React Development Proxy (with YARP and Hot Reload)
-if (builder.Environment.IsDevelopment())
-{
-    builder.Services.AddReactDevelopmentProxy(builder.Environment);
-}
+builder.Services.AddReactDevelopmentProxy(builder.Environment, builder.Configuration);
 var app = builder.Build();
 
 // ==============================================================================
@@ -109,8 +106,8 @@ app.MapControllers();
 // Serve static files (css, js, images) to support both Blazor and React assets
 app.UseStaticFiles();
 
-// In Development, proxy /react requests to the Vite Dev Server
-if (app.Environment.IsDevelopment())
+// In Development, proxy /react requests to the Vite Dev Server (if enabled)
+if (app.Environment.IsDevelopment() && app.Configuration.GetValue<bool>("React:UseDevelopmentServer", true))
 {
     app.MapReverseProxy();
 }

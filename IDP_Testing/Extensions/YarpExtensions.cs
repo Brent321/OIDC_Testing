@@ -5,9 +5,13 @@ namespace IDP_Testing.Extensions;
 
 public static class YarpExtensions
 {
-    public static IServiceCollection AddReactDevelopmentProxy(this IServiceCollection services, IHostEnvironment environment)
+    public static IServiceCollection AddReactDevelopmentProxy(this IServiceCollection services, IHostEnvironment environment, IConfiguration configuration)
     {
-        services.AddReverseProxy()
+        var useDevServer = configuration.GetValue<bool>("React:UseDevelopmentServer", true);
+
+        if (environment.IsDevelopment() && useDevServer)
+        {
+            services.AddReverseProxy()
             .LoadFromMemory(
                 [
                     new RouteConfig
@@ -33,8 +37,9 @@ public static class YarpExtensions
                 ]
             );
 
-        // Start the React Dev Server automatically
-        services.AddHostedService<ReactDevelopmentServer>();
+            // Start the React Dev Server automatically
+            services.AddHostedService<ReactDevelopmentServer>();
+        }
 
         return services;
     }
