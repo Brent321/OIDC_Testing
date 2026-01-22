@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [react()],
   base: '/react/',
   build: {
-    outDir: '../wwwroot/react',
+    outDir: '../IDP_Testing/wwwroot/react',
     emptyOutDir: true
   },
   server: {

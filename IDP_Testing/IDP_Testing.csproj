@@ -16,4 +16,27 @@
     <PackageReference Include="Sustainsys.Saml2.AspNetCore2" Version="2.11.0" />
   </ItemGroup>
 
+  <Target Name="BuildReactFrontend" BeforeTargets="Build;ComputeFilesToPublish">
+    <!-- Ensure Node.js is installed -->
+    <Exec Command="node --version" ContinueOnError="true">
+      <Output TaskParameter="ExitCode" PropertyName="ErrorCode" />
+    </Exec>
+    <Error Condition="'$(ErrorCode)' != '0'" Text="Node.js is required to build and run this project. To continue, please install Node.js from https://nodejs.org/, and then restart your command prompt or IDE." />
+
+    <!-- Install dependencies and build the React app -->
+    <Message Importance="high" Text="Restoring dependencies and building React frontend..." />
+    <Exec Command="npm install" WorkingDirectory="..\react-front-end" />
+    <Exec Command="npm run build" WorkingDirectory="..\react-front-end" />
+
+    <!-- Include the newly built files in the publish output -->
+    <ItemGroup>
+      <DistFiles Include="wwwroot\react\**" />
+      <ResolvedFileToPublish Include="@(DistFiles->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
+        <RelativePath>wwwroot\react\%(RecursiveDir)%(FileName)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+
 </Project>

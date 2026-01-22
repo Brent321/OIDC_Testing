@@ -361,3 +361,17 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Node.js Dependencies
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# React Build Artifacts
+IDP_Testing/wwwroot/react/
+react-front-end/dist/
+react-front-end/coverage/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

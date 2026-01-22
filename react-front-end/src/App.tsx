@@ -27,6 +27,10 @@ function App() {
     window.location.href = '/authentication/logout?returnUrl=' + encodeURIComponent(window.location.href)
   }
 
+  // In development, we need to point to the backend URL explicitly.
+  // In production (served by .NET), the Blazor app is at the root.
+  const blazorAppUrl = import.meta.env.DEV ? 'https://localhost:7235/' : '/'
+
   if (loading) {
     return <div className="loading">Loading...</div>
   }
@@ -38,7 +42,22 @@ function App() {
         {user.isAuthenticated ? (
           <div className="user-info">
             <p>Welcome, {user.name}!</p>
-            <button onClick={logout}>Logout</button>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: '10px' }}>
+              <button onClick={logout}>Logout</button>
+              <a href={blazorAppUrl} className="button-link" style={{ 
+                display: 'inline-block', 
+                padding: '0.6em 1.2em', 
+                border: '1px solid transparent', 
+                borderRadius: '8px', 
+                backgroundColor: '#1a1a1a', 
+                color: 'white', 
+                textDecoration: 'none', 
+                fontSize: '1em', 
+                fontFamily: 'inherit',
+                cursor: 'pointer',
+                transition: 'border-color 0.25s'
+              }}>Go to Blazor App</a>
+            </div>
           </div>
         ) : (
           <button onClick={login}>Login</button>
