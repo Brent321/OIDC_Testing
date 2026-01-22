@@ -2,15 +2,15 @@
 
 A modern **Hybrid .NET 10** application combining **Blazor Server**, **React 19**, and a robust **Authentication** system (OIDC, SAML, WS-Fed). This project demonstrates a "Backend for Frontend" (BFF) architecture with dynamic plugin loading and deep Keycloak integration.
 
-## 🚀 Key Features
+## Key Features
 
-### 🏗️ Hybrid Architecture (BFF)
+### Hybrid Architecture (BFF)
 - **.NET 10 Backend**: Serves both API endpoints and Blazor Server components.
 - **React 19 Frontend**: Integrated SPA hosted at `/react`.
 - **YARP Reverse Proxy**: Seamless development experience with React Hot Reload (Vite) proxied through the .NET host.
 - **Unified Auth**: Both Blazor and React share the same secure HttpOnly authentication cookies.
 
-### 🔐 Multi-Protocol Authentication
+### Multi-Protocol Authentication
 - **OpenID Connect (OIDC)**: Integrated with Keycloak.
 - **SAML 2.0**: Service Provider (SP) support.
 - **WS-Federation**: Legacy support scenarios.
@@ -21,13 +21,13 @@ A modern **Hybrid .NET 10** application combining **Blazor Server**, **React 19*
 - **Dynamic Routing**: New pages in uploaded assemblies are automatically discovered and routable.
 - **Isolation**: Plugins are loaded into the application context without restarting the server.
 
-### ⚙️ Dynamic Configuration
+### Dynamic Configuration
 - **Database-Backed Config**: Configurations (Authentication settings, toggles) are stored in SQL Server and override `appsettings.json`.
 - **Admin UI**: Modify system behavior at runtime without deployments.
 
 ---
 
-## 🛠️ Prerequisites
+## Prerequisites
 
 - **.NET 10 SDK** (Preview)
 - **Node.js 22+** (For React/Vite)
@@ -36,7 +36,7 @@ A modern **Hybrid .NET 10** application combining **Blazor Server**, **React 19*
 
 ---
 
-## ⚡ Quick Start
+## Quick Start
 
 ### 1. Infrastructure Setup
 Start the required services (Keycloak & SQL Server) using Docker Compose:
@@ -89,7 +89,7 @@ dotnet run
 
 ---
 
-## 📦 Deployment & Production
+## Deployment & Production
 
 ### Frontend Build
 The project is configured to automatically build the React frontend when publishing in Release mode.
@@ -120,7 +120,7 @@ docker run -p 8080:8080 idp-testing
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 ├── IDP_Testing/              # .NET 10 ASP.NET Core Project
