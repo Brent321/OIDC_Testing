@@ -1,0 +1,116 @@
+@page "/admin/plugins"
+@using IDP_Testing.Services
+@using System.Reflection
+@inject PluginService PluginService
+@inject ILogger<PluginManagement> Logger
+@attribute [Authorize(Roles = "app-admin")]
+
+<PageTitle>Plugin Management</PageTitle>
+
+<div class="container mt-4">
+    <h1>Plugin Management</h1>
+    <p class="text-muted">Upload and manage Blazor frontend plugins (.dll). <strong class="text-danger">Warning: Only upload trusted assemblies.</strong></p>
+
+    <div class="row">
+        <!-- List of Loaded Plugins -->
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    Loaded Assemblies
+                </div>
+                <div class="card-body">
+                    @if (PluginService.LoadedAssemblies.Any())
+                    {
+                        <ul class="list-group">
+                            @foreach (var assembly in PluginService.LoadedAssemblies)
+                            {
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>@assembly.GetName().Name</strong>
+                                        <br />
+                                        <small class="text-muted">v @assembly.GetName().Version</small>
+                                    </div>
+                                    <span class="badge bg-success rounded-pill">Loaded</span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <div class="alert alert-info">No external plugins loaded.</div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Upload Form -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-warning">
+                    Upload Plugin
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Select .dll file</label>
+                        <InputFile OnChange="@LoadFiles" class="form-control" accept=".dll" />
+                    </div>
+
+                    @if (uploading)
+                    {
+                        <div class="progress mb-3">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%">Uploading...</div>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(statusMessage))
+                    {
+                         <div class="alert @statusClass">@statusMessage</div>
+                    }
+                    
+                    <div class="mt-2 text-danger small">
+                        Running unverified code can compromise the server. Ensure the source is trusted.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool uploading = false;
+    private string statusMessage = "";
+    private string statusClass = "";
+
+    private async Task LoadFiles(InputFileChangeEventArgs e)
+    {
+        uploading = true;
+        statusMessage = "";
+        
+        try
+        {
+            var file = e.File;
+            if (file == null) return;
+
+            // Limit size to 10MB
+            long maxFileSize = 1024 * 1024 * 10; 
+            
+            using var stream = file.OpenReadStream(maxFileSize);
+            await PluginService.UploadPluginAsync(stream, file.Name);
+
+            statusMessage = $"Successfully uploaded {file.Name}. Reloading context...";
+            statusClass = "alert-success";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Upload failed");
+            statusMessage = $"Error: {ex.Message}";
+            statusClass = "alert-danger";
+        }
+        finally
+        {
+            uploading = false;
+            // Force re-render to show new list
+            StateHasChanged();
+        }
+    }
+}

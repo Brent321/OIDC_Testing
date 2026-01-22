@@ -45,6 +45,10 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // Register the internal service for managing database-stored configurations
 builder.Services.AddScoped<IConfigurationService, ConfigurationService>();
 
+// Register Plugin Service for dynamic frontend loading
+builder.Services.AddSingleton<PluginService>();
+
+
 // Configure Session State
 // This is used to store temporary authentication artifacts and user state.
 builder.Services.AddDistributedMemoryCache();
@@ -67,6 +71,9 @@ builder.Services.AddAntiforgery();
 // Configure React Development Proxy (with YARP and Hot Reload)
 builder.Services.AddReactDevelopmentProxy(builder.Environment, builder.Configuration);
 var app = builder.Build();
+
+// Initialize Plugins
+app.Services.GetRequiredService<PluginService>().LoadPlugins();
 
 // ==============================================================================
 // 3. Request Pipeline Configuration (Middleware)

@@ -1,6 +1,36 @@
-﻿<Router AppAssembly="typeof(Program).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+﻿@using IDP_Testing.Services
+@using System.Reflection
+@inject PluginService PluginService
+@implements IDisposable
+
+<Router AppAssembly="typeof(Program).Assembly" AdditionalAssemblies="@_lazyLoadedAssemblies" NotFoundPage="typeof(Pages.NotFound)">
     <Found Context="routeData">
         <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
         <FocusOnNavigate RouteData="routeData" Selector="h1" />
     </Found>
 </Router>
+
+@code {
+    private List<Assembly> _lazyLoadedAssemblies = new();
+
+    protected override void OnInitialized()
+    {
+        // Initial load
+        _lazyLoadedAssemblies.AddRange(PluginService.LoadedAssemblies);
+        
+        // Listen for updates
+        PluginService.OnPluginLoaded += HandlePluginLoaded;
+    }
+
+    private void HandlePluginLoaded()
+    {
+        // Update local list and re-render
+        _lazyLoadedAssemblies = PluginService.LoadedAssemblies.ToList(); 
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        PluginService.OnPluginLoaded -= HandlePluginLoaded;
+    }
+}
