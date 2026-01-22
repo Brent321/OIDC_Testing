@@ -16,7 +16,7 @@ A modern **Hybrid .NET 10** application combining **Blazor Server**, **React 19*
 - **WS-Federation**: Legacy support scenarios.
 - **Keycloak Docker**: Pre-configured Identity Provider with automatic realm import.
 
-### 🔌 Runtime Plugin System
+### Runtime Plugin System
 - **Hot-Plug Blazor**: Upload `.dll` files at runtime via the Admin Dashboard.
 - **Dynamic Routing**: New pages in uploaded assemblies are automatically discovered and routable.
 - **Isolation**: Plugins are loaded into the application context without restarting the server.
