@@ -132,5 +132,5 @@ docker run -p 8080:8080 idp-testing
 │   └── wwwroot/              # Static Assets (React build in prod)
 ├── react-front-end/          # React 19 + Vite Project
 ├── TestBlazorPlugin/         # Sample Runtime Plugin (RCL)
-└── docker-compose.yml        # Infrastructure (Keycloak, MSSQL)
+└── docker-compose.yml        # Infrastructure (Keycloak)
 ```
