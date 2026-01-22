@@ -71,9 +71,7 @@ builder.Services.AddAntiforgery();
 builder.Services.AddReactDevelopmentProxy(builder.Environment, builder.Configuration);
 var app = builder.Build();
 
-// ==============================================================================
 // Load plugins at startup from the singleton instance
-// ==============================================================================
 var pluginService = app.Services.GetRequiredService<PluginService>();
 pluginService.LoadPlugins();
 
