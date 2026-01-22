@@ -18,54 +18,69 @@
         <div class="col-md-8">
             <div class="card mb-4">
                 <div class="card-header">
-                    Loaded Assemblies
+                    Loaded Assemblies (@PluginService.LoadedAssemblies.Count)
                 </div>
                 <div class="card-body">
                     @if (PluginService.LoadedAssemblies.Any())
                     {
-                        <ul class="list-group">
-                            @foreach (var assembly in PluginService.LoadedAssemblies)
-                            {
-                                <li class="list-group-item">
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        @foreach (var assembly in PluginService.LoadedAssemblies)
+                        {
+                            <div class="card mb-3">
+                                <div class="card-header bg-light">
+                                    <div class="d-flex justify-content-between align-items-center">
                                         <div>
                                             <strong>@assembly.GetName().Name</strong>
                                             <br />
                                             <small class="text-muted">v @assembly.GetName().Version</small>
                                         </div>
-                                        <span class="badge bg-success rounded-pill">Loaded</span>
+                                        <span class="badge bg-success">Loaded</span>
                                     </div>
-                                    
+                                </div>
+                                <div class="card-body">
                                     @{
                                         var components = GetComponentsFromAssembly(assembly);
                                     }
                                     
                                     @if (components.Any())
                                     {
-                                        <div class="mt-2">
-                                            <small class="text-muted">Available Components:</small>
-                                            <div class="list-group list-group-flush">
-                                                @foreach (var component in components)
-                                                {
-                                                    <button class="list-group-item list-group-item-action" 
-                                                            @onclick="() => RenderComponent(component)">
-                                                        <i class="bi bi-puzzle-fill"></i> @component.Name
-                                                    </button>
-                                                }
-                                            </div>
-                                        </div>
+                                        <h6 class="mb-2">Components (@components.Count):</h6>
+                                        <ul class="list-group">
+                                            @foreach (var component in components)
+                                            {
+                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    <div>
+                                                        <i class="bi bi-puzzle-fill text-primary"></i>
+                                                        <strong>@component.Name</strong>
+                                                        <br/>
+                                                        <small class="text-muted">@component.Namespace</small>
+                                                    </div>
+                                                    <div>
+                                                        <button class="btn btn-sm btn-primary" @onclick="() => RenderComponent(component)">
+                                                            <i class="bi bi-play-fill"></i> Render
+                                                        </button>
+                                                        <a href="/plugin/@component.Name" class="btn btn-sm btn-outline-primary" target="_blank">
+                                                            <i class="bi bi-box-arrow-up-right"></i> Open
+                                                        </a>
+                                                    </div>
+                                                </li>
+                                            }
+                                        </ul>
                                     }
                                     else
                                     {
-                                        <small class="text-muted">No Blazor components found</small>
+                                        <div class="alert alert-info mb-0">
+                                            <i class="bi bi-info-circle"></i> No Blazor components found in this assembly
+                                        </div>
                                     }
-                                </li>
-                            }
-                        </ul>
+                                </div>
+                            </div>
+                        }
                     }
                     else
                     {
-                        <div class="alert alert-info">No external plugins loaded.</div>
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> No external plugins loaded.
+                        </div>
                     }
                 </div>
             </div>
@@ -103,7 +118,7 @@
         </div>
     </div>
 
-    <!-- Component Renderer -->
+    <!-- Component Preview -->
     @if (selectedComponentType != null)
     {
         <div class="row mt-4">
@@ -111,23 +126,14 @@
                 <div class="card">
                     <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">
-                            <i class="bi bi-display"></i> Rendering: @selectedComponentType.Name
+                            <i class="bi bi-display"></i> Preview: @selectedComponentType.Name
                         </h5>
                         <button class="btn btn-sm btn-light" @onclick="CloseComponent">
                             <i class="bi bi-x-lg"></i> Close
                         </button>
                     </div>
                     <div class="card-body">
-                        @if (!string.IsNullOrEmpty(renderError))
-                        {
-                            <div class="alert alert-danger">
-                                <strong>Error rendering component:</strong> @renderError
-                            </div>
-                        }
-                        else
-                        {
-                            <DynamicComponent Type="@selectedComponentType" />
-                        }
+                        <DynamicComponent Type="@selectedComponentType" />
                     </div>
                 </div>
             </div>
@@ -140,7 +146,6 @@
     private string statusMessage = "";
     private string statusClass = "";
     private Type? selectedComponentType = null;
-    private string? renderError = null;
 
     private async Task LoadFiles(InputFileChangeEventArgs e)
     {
@@ -166,9 +171,12 @@
             using var stream = file.OpenReadStream(maxFileSize);
             await PluginService.UploadPluginAsync(stream, file.Name);
 
-            statusMessage = $"Successfully uploaded {file.Name}. Reloading context...";
+            statusMessage = $"Successfully uploaded {file.Name}. Plugin loaded!";
             statusClass = "alert-success";
             Logger.LogInformation("Upload successful");
+            
+            // Trigger UI refresh to show new components
+            StateHasChanged();
         }
         catch (Exception ex)
         {
@@ -191,6 +199,7 @@
             return assembly.GetTypes()
                 .Where(t => t.IsClass && 
                            !t.IsAbstract && 
+                           t.IsPublic &&
                            componentBaseType.IsAssignableFrom(t))
                 .OrderBy(t => t.Name)
                 .ToList();
@@ -206,15 +215,12 @@
     {
         Logger.LogInformation("Rendering component: {ComponentType}", componentType.FullName);
         selectedComponentType = componentType;
-        renderError = null;
         StateHasChanged();
     }
 
     private void CloseComponent()
     {
-        Logger.LogInformation("Closing rendered component");
         selectedComponentType = null;
-        renderError = null;
         StateHasChanged();
     }
 }

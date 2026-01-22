@@ -1,0 +1,74 @@
+@page "/plugin/{ComponentName}"
+@rendermode InteractiveServer
+@using System.Reflection
+@using Microsoft.AspNetCore.Components
+@inject IDP_Testing.Services.PluginService PluginService
+@inject NavigationManager Navigation
+@inject ILogger<PluginComponent> Logger
+
+<PageTitle>@ComponentName</PageTitle>
+
+@if (componentType != null)
+{
+    <div class="container mt-4">
+        <DynamicComponent Type="@componentType" />
+    </div>
+}
+else if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="container mt-4">
+        <div class="alert alert-danger">
+            <h4>Component Not Found</h4>
+            <p>@errorMessage</p>
+            <a href="/" class="btn btn-primary">Return Home</a>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string ComponentName { get; set; } = string.Empty;
+
+    private Type? componentType;
+    private string? errorMessage;
+
+    protected override void OnParametersSet()
+    {
+        LoadComponent();
+    }
+
+    private void LoadComponent()
+    {
+        Logger.LogInformation("Attempting to load plugin component: {ComponentName}", ComponentName);
+
+        try
+        {
+            var componentBaseType = typeof(ComponentBase);
+
+            foreach (var assembly in PluginService.LoadedAssemblies)
+            {
+                var type = assembly.GetTypes()
+                    .FirstOrDefault(t => t.Name.Equals(ComponentName, StringComparison.OrdinalIgnoreCase) &&
+                                        t.IsClass &&
+                                        !t.IsAbstract &&
+                                        componentBaseType.IsAssignableFrom(t));
+
+                if (type != null)
+                {
+                    componentType = type;
+                    Logger.LogInformation("Found component: {TypeName} in assembly {AssemblyName}",
+                        type.FullName, assembly.GetName().Name);
+                    return;
+                }
+            }
+
+            errorMessage = $"Component '{ComponentName}' not found in any loaded plugin.";
+            Logger.LogWarning("Component not found: {ComponentName}", ComponentName);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading component: {ex.Message}";
+            Logger.LogError(ex, "Error loading component {ComponentName}", ComponentName);
+        }
+    }
+}

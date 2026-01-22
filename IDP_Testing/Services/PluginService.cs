@@ -1,5 +1,5 @@
 using System.Reflection;
-using System.Runtime.Loader;
+using System.Collections.Concurrent;
 
 namespace IDP_Testing.Services;
 
@@ -7,9 +7,10 @@ public class PluginService
 {
     private readonly string _pluginsPath;
     private readonly ILogger<PluginService> _logger;
-    private readonly List<Assembly> _loadedAssemblies = new();
+    private readonly ConcurrentBag<Assembly> _loadedAssemblies = new();
+    private readonly object _loadLock = new();
 
-    public IReadOnlyList<Assembly> LoadedAssemblies => _loadedAssemblies.AsReadOnly();
+    public IReadOnlyList<Assembly> LoadedAssemblies => _loadedAssemblies.ToList().AsReadOnly();
     public event Action? OnPluginLoaded;
 
     public PluginService(IWebHostEnvironment env, ILogger<PluginService> logger)
@@ -23,35 +24,39 @@ public class PluginService
             Directory.CreateDirectory(_pluginsPath);
         }
         
-        _logger.LogInformation("PluginService initialized. Plugins path: {Path}", _pluginsPath);
+        _logger.LogInformation("PluginService initialized as singleton. Plugins path: {Path}", _pluginsPath);
     }
 
     public void LoadPlugins()
     {
-        _logger.LogInformation("Loading plugins from {Path}", _pluginsPath);
-        
-        var dllFiles = Directory.GetFiles(_pluginsPath, "*.dll");
-        _logger.LogInformation("Found {Count} DLL files in plugins directory", dllFiles.Length);
-        
-        foreach (var dllPath in dllFiles)
+        lock (_loadLock)
         {
-            try
+            _logger.LogInformation("Loading plugins from {Path}", _pluginsPath);
+            
+            var dllFiles = Directory.GetFiles(_pluginsPath, "*.dll");
+            _logger.LogInformation("Found {Count} DLL files in plugins directory", dllFiles.Length);
+            
+            foreach (var dllPath in dllFiles)
             {
-                var assembly = Assembly.LoadFrom(dllPath);
-                
-                if (!_loadedAssemblies.Contains(assembly))
+                try
                 {
-                    _loadedAssemblies.Add(assembly);
-                    _logger.LogInformation("Loaded plugin assembly: {Name} from {Path}", assembly.FullName, dllPath);
+                    var assembly = Assembly.LoadFrom(dllPath);
+                    
+                    if (!_loadedAssemblies.Contains(assembly))
+                    {
+                        _loadedAssemblies.Add(assembly);
+                        _logger.LogInformation("Loaded plugin assembly: {Name} from {Path}", 
+                            assembly.FullName, dllPath);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to load plugin from {Path}", dllPath);
                 }
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to load plugin from {Path}", dllPath);
-            }
+            
+            _logger.LogInformation("Total plugins loaded: {Count}", _loadedAssemblies.Count);
         }
-        
-        _logger.LogInformation("Total plugins loaded: {Count}", _loadedAssemblies.Count);
     }
 
     public async Task UploadPluginAsync(Stream stream, string filename)
@@ -98,14 +103,19 @@ public class PluginService
         try
         {
             _logger.LogInformation("Loading assembly from: {Path}", filePath);
-            var assembly = Assembly.LoadFrom(filePath);
-            _loadedAssemblies.Add(assembly);
-            _logger.LogInformation("Assembly loaded successfully: {Name}, Version: {Version}", 
-                assembly.GetName().Name, assembly.GetName().Version);
             
-            // Notify subscribers that a plugin was loaded
-            OnPluginLoaded?.Invoke();
-            _logger.LogInformation("=== UploadPluginAsync SUCCESS ===");
+            lock (_loadLock)
+            {
+                var assembly = Assembly.LoadFrom(filePath);
+                _loadedAssemblies.Add(assembly);
+                
+                _logger.LogInformation("Assembly loaded successfully: {Name}, Version: {Version}", 
+                    assembly.GetName().Name, assembly.GetName().Version);
+                
+                // Notify all subscribers (NavMenu instances)
+                OnPluginLoaded?.Invoke();
+                _logger.LogInformation("=== UploadPluginAsync SUCCESS ===");
+            }
         }
         catch (Exception ex)
         {

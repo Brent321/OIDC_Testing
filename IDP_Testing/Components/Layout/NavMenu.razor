@@ -1,4 +1,12 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
+﻿@rendermode InteractiveServer
+@using IDP_Testing.Services
+@using System.Reflection
+@using Microsoft.AspNetCore.Components
+@inject PluginService PluginService
+@inject ILogger<NavMenu> Logger
+@implements IDisposable
+
+<div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid d-flex justify-content-between align-items-center">
         <a class="navbar-brand" href="">IDP_Testing</a>
         <AuthorizeView>
@@ -58,13 +66,85 @@
                         <span class="bi bi-shield-lock-fill-nav-menu" aria-hidden="true"></span> Admin
                     </NavLink>
                 </div>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="admin/configuration">
-                        <span class="bi bi-gear-fill" aria-hidden="true"></span> Configuration
-                    </NavLink>
-                </div>
             </Authorized>
         </AuthorizeView>
+
+        @if (pluginComponents.Any())
+        {
+            <div class="nav-item px-3 pt-3">
+                <hr class="border-secondary" />
+                <h6 class="text-muted px-3 mb-2">
+                    <span class="bi bi-puzzle-fill" aria-hidden="true"></span> Plugins (@pluginComponents.Count)
+                </h6>
+            </div>
+
+            @foreach (var component in pluginComponents)
+            {
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="@($"plugin/{component.Name}")">
+                        <span class="bi bi-plugin" aria-hidden="true"></span> @component.Name
+                    </NavLink>
+                </div>
+            }
+        }
     </nav>
 </div>
+
+@code {
+    private List<Type> pluginComponents = new();
+
+    protected override void OnInitialized()
+    {
+        Logger.LogInformation("NavMenu initialized, loading plugin components");
+        LoadPluginComponents();
+
+        // Subscribe to plugin loaded events
+        PluginService.OnPluginLoaded += OnPluginLoadedHandler;
+    }
+
+    private void OnPluginLoadedHandler()
+    {
+        Logger.LogInformation("Plugin loaded event received in NavMenu, refreshing components");
+        LoadPluginComponents();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void LoadPluginComponents()
+    {
+        pluginComponents.Clear();
+
+        try
+        {
+            var componentBaseType = typeof(ComponentBase);
+            Logger.LogInformation("Scanning {Count} loaded assemblies for components", PluginService.LoadedAssemblies.Count);
+
+            foreach (var assembly in PluginService.LoadedAssemblies)
+            {
+                var components = assembly.GetTypes()
+                    .Where(t => t.IsClass &&
+                               !t.IsAbstract &&
+                               t.IsPublic &&
+                               componentBaseType.IsAssignableFrom(t))
+                    .OrderBy(t => t.Name)
+                    .ToList();
+
+                pluginComponents.AddRange(components);
+
+                Logger.LogInformation("Found {Count} components in assembly {AssemblyName}",
+                    components.Count, assembly.GetName().Name);
+            }
+
+            Logger.LogInformation("Total plugin components for navigation: {Count}", pluginComponents.Count);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading plugin components for navigation");
+        }
+    }
+
+    public void Dispose()
+    {
+        PluginService.OnPluginLoaded -= OnPluginLoadedHandler;
+    }
+}
 
