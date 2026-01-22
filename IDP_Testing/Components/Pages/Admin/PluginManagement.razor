@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using IDP_Testing.Services
 @using System.Reflection
+@using Microsoft.AspNetCore.Components
 @inject PluginService PluginService
 @inject ILogger<PluginManagement> Logger
 @attribute [Authorize(Roles = "app-admin")]
@@ -25,13 +26,39 @@
                         <ul class="list-group">
                             @foreach (var assembly in PluginService.LoadedAssemblies)
                             {
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <strong>@assembly.GetName().Name</strong>
-                                        <br />
-                                        <small class="text-muted">v @assembly.GetName().Version</small>
+                                <li class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <div>
+                                            <strong>@assembly.GetName().Name</strong>
+                                            <br />
+                                            <small class="text-muted">v @assembly.GetName().Version</small>
+                                        </div>
+                                        <span class="badge bg-success rounded-pill">Loaded</span>
                                     </div>
-                                    <span class="badge bg-success rounded-pill">Loaded</span>
+                                    
+                                    @{
+                                        var components = GetComponentsFromAssembly(assembly);
+                                    }
+                                    
+                                    @if (components.Any())
+                                    {
+                                        <div class="mt-2">
+                                            <small class="text-muted">Available Components:</small>
+                                            <div class="list-group list-group-flush">
+                                                @foreach (var component in components)
+                                                {
+                                                    <button class="list-group-item list-group-item-action" 
+                                                            @onclick="() => RenderComponent(component)">
+                                                        <i class="bi bi-puzzle-fill"></i> @component.Name
+                                                    </button>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <small class="text-muted">No Blazor components found</small>
+                                    }
                                 </li>
                             }
                         </ul>
@@ -75,12 +102,45 @@
             </div>
         </div>
     </div>
+
+    <!-- Component Renderer -->
+    @if (selectedComponentType != null)
+    {
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-display"></i> Rendering: @selectedComponentType.Name
+                        </h5>
+                        <button class="btn btn-sm btn-light" @onclick="CloseComponent">
+                            <i class="bi bi-x-lg"></i> Close
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        @if (!string.IsNullOrEmpty(renderError))
+                        {
+                            <div class="alert alert-danger">
+                                <strong>Error rendering component:</strong> @renderError
+                            </div>
+                        }
+                        else
+                        {
+                            <DynamicComponent Type="@selectedComponentType" />
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
     private bool uploading = false;
     private string statusMessage = "";
     private string statusClass = "";
+    private Type? selectedComponentType = null;
+    private string? renderError = null;
 
     private async Task LoadFiles(InputFileChangeEventArgs e)
     {
@@ -121,5 +181,40 @@
             uploading = false;
             StateHasChanged();
         }
+    }
+
+    private List<Type> GetComponentsFromAssembly(Assembly assembly)
+    {
+        try
+        {
+            var componentBaseType = typeof(ComponentBase);
+            return assembly.GetTypes()
+                .Where(t => t.IsClass && 
+                           !t.IsAbstract && 
+                           componentBaseType.IsAssignableFrom(t))
+                .OrderBy(t => t.Name)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to get components from assembly {AssemblyName}", assembly.FullName);
+            return new List<Type>();
+        }
+    }
+
+    private void RenderComponent(Type componentType)
+    {
+        Logger.LogInformation("Rendering component: {ComponentType}", componentType.FullName);
+        selectedComponentType = componentType;
+        renderError = null;
+        StateHasChanged();
+    }
+
+    private void CloseComponent()
+    {
+        Logger.LogInformation("Closing rendered component");
+        selectedComponentType = null;
+        renderError = null;
+        StateHasChanged();
     }
 }
