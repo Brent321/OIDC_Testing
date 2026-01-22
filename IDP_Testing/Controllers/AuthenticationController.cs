@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using IDP_Testing.Configuration;
+using Microsoft.AspNetCore.Authorization;
 
 namespace IDP_Testing.Controllers;
 
@@ -32,12 +33,24 @@ public class AuthenticationController : Controller
     }
 
     [HttpGet("logout")]
-    public async Task<IActionResult> Logout()
+    public async Task<IActionResult> Logout(string? returnUrl = null)
     {
         if (User.Identity?.IsAuthenticated != true)
         {
             Console.WriteLine("Logout called but user not authenticated - redirecting home");
-            return Redirect("~/");
+            return Redirect(returnUrl ?? "~/");
+        }
+
+        if (!string.IsNullOrEmpty(returnUrl))
+        {
+             // Store the return URL in a cookie so we can access it after the redirect from IDP
+             Response.Cookies.Append("PostLogoutReturnUrl", returnUrl, new CookieOptions 
+             { 
+                 Expires = DateTimeOffset.Now.AddMinutes(10),
+                 HttpOnly = true,
+                 Secure = true, // We are on https
+                 SameSite = SameSiteMode.Lax
+             });
         }
 
         Console.WriteLine($"Logout initiated with scheme: {_authenticationScheme}");
@@ -71,5 +84,18 @@ public class AuthenticationController : Controller
     public IActionResult SignoutCallbackWsFed()
     {
         return Redirect("~/");
+    }
+
+    [HttpGet("/logged-out")]
+    [AllowAnonymous]
+    public IActionResult LoggedOut()
+    {
+         var returnUrl = Request.Cookies["PostLogoutReturnUrl"];
+         if (!string.IsNullOrEmpty(returnUrl))
+         {
+             Response.Cookies.Delete("PostLogoutReturnUrl");
+             return Redirect(returnUrl);
+         }
+         return Redirect("~/");
     }
 }

@@ -24,7 +24,7 @@ function App() {
   }
 
   const logout = () => {
-    window.location.href = '/authentication/logout'
+    window.location.href = '/authentication/logout?returnUrl=' + encodeURIComponent(window.location.href)
   }
 
   if (loading) {
