@@ -20,7 +20,7 @@ function App() {
   }, [])
 
   const login = () => {
-    window.location.href = '/authentication/login?returnUrl=' + encodeURIComponent(window.location.pathname)
+    window.location.href = '/authentication/login?returnUrl=' + encodeURIComponent(window.location.href)
   }
 
   const logout = () => {

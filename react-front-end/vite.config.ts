@@ -10,8 +10,16 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': 'https://localhost:7235',
-      '/authentication': 'https://localhost:7235'
+      '/api': {
+        target: 'https://localhost:7235',
+        secure: false,
+        changeOrigin: true
+      },
+      '/authentication': {
+        target: 'https://localhost:7235',
+        secure: false,
+        changeOrigin: true
+      }
     }
   }
 })

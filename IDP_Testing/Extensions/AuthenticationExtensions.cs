@@ -49,7 +49,9 @@ public static class AuthenticationExtensions
                 options.ExpireTimeSpan = TimeSpan.FromHours(1);
                 options.SlidingExpiration = true;
                 options.Cookie.SameSite = SameSiteMode.Lax;
-                options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+                options.Cookie.SecurePolicy = environment.IsDevelopment() 
+                    ? CookieSecurePolicy.None 
+                    : CookieSecurePolicy.Always;
 
                 // Preserve the original authentication type
                 options.Events.OnSigningIn = context =>
