@@ -45,12 +45,12 @@ public static class AuthenticationExtensions
             })
             .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
             {
-                options.Cookie.Name = ".AspNetCore.Cookies";
+                options.Cookie.Name = "IDP_Testing_Auth"; // Use a distinct name
                 options.ExpireTimeSpan = TimeSpan.FromHours(1);
                 options.SlidingExpiration = true;
-                options.Cookie.SameSite = SameSiteMode.Lax;
+                options.Cookie.SameSite = SameSiteMode.Lax; // Important for SAML Post binding
                 options.Cookie.SecurePolicy = environment.IsDevelopment() 
-                    ? CookieSecurePolicy.None 
+                    ? CookieSecurePolicy.SameAsRequest // Allow HTTP in dev
                     : CookieSecurePolicy.Always;
 
                 // Preserve the original authentication type
@@ -246,8 +246,13 @@ public static class AuthenticationExtensions
             {
                 var saml2ConfigOptions = saml2ConfigOptionsAccessor.Value;
 
+                // Configure correlation cookie to handle Chrome's SameSite policy
+                saml2Options.CookieManager = new SameSiteCookieManager(new ChunkingCookieManager());
+
+                // Configure EntityId AND the ReturnUrl to point to the ACS (Assertion Consumer Service)
+                // In Sustainsys.Saml2, the ReturnUrl is used to generate the ACS URL in the metadata
                 saml2Options.SPOptions.EntityId = new EntityId(saml2ConfigOptions.EntityId);
-                saml2Options.SPOptions.ReturnUrl = new Uri(saml2ConfigOptions.EntityId);
+                saml2Options.SPOptions.ReturnUrl = new Uri($"{saml2ConfigOptions.EntityId}/Saml2/Acs");
 
                 if (environment.IsDevelopment())
                 {
@@ -376,5 +381,32 @@ public static class AuthenticationExtensions
             })
             .Services
             .AddAuthentication();
+    }
+
+    private class SameSiteCookieManager : ICookieManager
+    {
+        private readonly ICookieManager _innerManager;
+
+        public SameSiteCookieManager(ICookieManager innerManager)
+        {
+            _innerManager = innerManager;
+        }
+
+        public void AppendResponseCookie(HttpContext context, string key, string value, CookieOptions options)
+        {
+            options.SameSite = SameSiteMode.None;
+            options.Secure = true;
+            _innerManager.AppendResponseCookie(context, key, value, options);
+        }
+
+        public void DeleteCookie(HttpContext context, string key, CookieOptions options)
+        {
+            _innerManager.DeleteCookie(context, key, options);
+        }
+
+        public string? GetRequestCookie(HttpContext context, string key)
+        {
+            return _innerManager.GetRequestCookie(context, key);
+        }
     }
 }
