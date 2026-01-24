@@ -29,7 +29,10 @@ function App() {
 
   // In development, we need to point to the backend URL explicitly.
   // In production (served by .NET), the Blazor app is at the root.
-  const blazorAppUrl = import.meta.env.DEV ? 'https://localhost:7235/' : '/'
+  // You can override this in dev by setting VITE_BLAZOR_APP_URL (e.g. http://localhost:5041/).
+  const blazorAppUrl = import.meta.env.DEV
+    ? (import.meta.env.VITE_BLAZOR_APP_URL ?? 'http://localhost:5041/')
+    : '/'
 
   if (loading) {
     return <div className="loading">Loading...</div>
