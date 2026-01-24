@@ -11,7 +11,7 @@
 @if (componentType != null)
 {
     <div class="container mt-4">
-        <DynamicComponent Type="@componentType" />
+        <DynamicComponent Type="@componentType" @rendermode="InteractiveServer" />
     </div>
 }
 else if (!string.IsNullOrEmpty(errorMessage))
